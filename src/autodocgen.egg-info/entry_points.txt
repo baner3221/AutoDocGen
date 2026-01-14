@@ -1,0 +1,2 @@
+[console_scripts]
+autodocgen = autodocgen.main:app

@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# AutoDocGen Data
+cache/
+data/
+*.db
+*.log
+
+# Generated Documentation (Optional - remove if you want to commit docs)
+docs/
+docs_myproject/
