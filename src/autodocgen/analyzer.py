@@ -195,6 +195,9 @@ class CodebaseAnalyzer:
                 chunk_docs.append(f"# {chunk.primary_symbol}\n\n*Documentation generation failed*")
             else:
                 chunk_docs.append(response.content)
+                # Show output snippet
+                preview = response.content[:100].replace("\n", " ") + "..."
+                console.print(f"[dim]Generated for {chunk.primary_symbol}: {preview}[/]")
                 chunk.llm_response = response.content
                 chunk.is_processed = True
 

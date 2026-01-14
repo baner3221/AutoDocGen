@@ -95,13 +95,13 @@ class LLMConfig(BaseModel):
     def get_effective_context(self) -> int:
         """Get effective context length based on mode."""
         if self.low_resource_mode:
-            return min(self.context_length, 4096)
+            return min(self.context_length, 8192)
         return self.context_length
 
     def get_effective_max_tokens(self) -> int:
         """Get effective max tokens based on mode."""
         if self.low_resource_mode:
-            return min(self.max_tokens, 1024)
+            return min(self.max_tokens, 2048)
         return self.max_tokens
 
 

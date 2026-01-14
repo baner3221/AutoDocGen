@@ -19,3 +19,4 @@ data/
 # Generated Documentation (Optional - remove if you want to commit docs)
 docs/
 docs_myproject/
+docs_test/

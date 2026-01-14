@@ -77,6 +77,11 @@ def init(
         "--config", "-c",
         help="Path to configuration file (JSON)",
     ),
+    workers: Optional[int] = typer.Option(
+        None,
+        "--workers", "-w",
+        help="Number of parallel workers (overrides config)",
+    ),
 ):
     """
     Initialize documentation generation for a C++ codebase.
@@ -93,6 +98,10 @@ def init(
         config.codebase_path = codebase
     else:
         config = get_default_config(codebase)
+
+    if workers is not None:
+        config.parallel_workers = workers
+        config.batch_size = max(1, workers) # auto-adjust batch size
 
     config.output_path = output
     config.llm.model_name = model
