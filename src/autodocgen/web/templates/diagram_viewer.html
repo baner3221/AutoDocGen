@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="diagram-container">
+    <div class="diagram-header">
+        <h1>{{ title }}</h1>
+        <div class="controls">
+            <button onclick="downloadSVG()" class="btn">⬇️ Download SVG</button>
+        </div>
+    </div>
+
+    <div id="diagram-error" class="error-banner" style="display: none;"></div>
+    <div id="diagram-loading" class="loading-spinner">Generatng Diagram...</div>
+    <div id="mermaid-target" class="mermaid-canvas"></div>
+
+    <!-- Raw diagram source hidden -->
+    <script id="diagram-source" type="text/plain">{{ diagram_source | safe }}</script>
+</div>
+
+<style>
+    .diagram-container {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+
+    .diagram-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 1rem;
+    }
+
+    .btn {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border);
+        color: var(--text-primary);
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.9rem;
+    }
+
+    .btn:hover {
+        background: var(--bg-secondary);
+        border-color: var(--accent);
+    }
+
+    .mermaid-canvas {
+        flex: 1;
+        overflow: auto;
+        background: var(--bg-secondary);
+        padding: 1rem;
+        border-radius: 6px;
+        display: flex;
+        justify-content: center;
+        min-height: 400px;
+    }
+
+    .error-banner {
+        background: rgba(248, 81, 73, 0.1);
+        border: 1px solid var(--error);
+        color: var(--error);
+        padding: 1rem;
+        border-radius: 6px;
+        margin-bottom: 1rem;
+        font-family: monospace;
+        white-space: pre-wrap;
+    }
+
+    .loading-spinner {
+        text-align: center;
+        color: var(--text-secondary);
+        padding: 2rem;
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', async () => {
+        const source = document.getElementById('diagram-source').textContent;
+        const target = document.getElementById('mermaid-target');
+        const errorBanner = document.getElementById('diagram-error');
+        const loading = document.getElementById('diagram-loading');
+
+        try {
+            mermaid.initialize({
+                startOnLoad: false,
+                theme: 'dark',
+                securityLevel: 'loose',
+                logLevel: 'error',
+            });
+
+            // Clean up source just in case (e.g. extra newlines)
+            const cleanSource = source.trim();
+
+            const { svg } = await mermaid.render('rendered-diagram', cleanSource);
+            target.innerHTML = svg;
+            loading.style.display = 'none';
+        } catch (e) {
+            loading.style.display = 'none';
+            errorBanner.style.display = 'block';
+            errorBanner.textContent = 'Mermaid Rendering Error:\n' + e.message;
+            console.error(e);
+
+            // Show raw source for debugging
+            const rawPre = document.createElement('pre');
+            rawPre.textContent = source;
+            target.appendChild(rawPre);
+        }
+    });
+
+    function downloadSVG() {
+        const svg = document.querySelector('#mermaid-target svg');
+        if (!svg) return;
+
+        const svgData = new XMLSerializer().serializeToString(svg);
+        const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'diagram.svg';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+</script>
+{% endblock %}

@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title }} - AutoDocGen</title>
-    
+
     <!-- All styles bundled locally -->
     <style>
         :root {
@@ -135,7 +136,7 @@
             flex-shrink: 0;
         }
 
-        .file-tree .directory > a {
+        .file-tree .directory>a {
             font-weight: 500;
         }
 
@@ -214,7 +215,8 @@
             margin: 1rem 0;
         }
 
-        .content th, .content td {
+        .content th,
+        .content td {
             padding: 0.75rem 1rem;
             border: 1px solid var(--border);
             text-align: left;
@@ -225,7 +227,8 @@
             font-weight: 600;
         }
 
-        .content ul, .content ol {
+        .content ul,
+        .content ol {
             margin: 1rem 0;
             padding-left: 2rem;
         }
@@ -266,12 +269,36 @@
             overflow-x: auto;
         }
 
-        .highlight .k { color: #ff79c6; }  /* Keywords */
-        .highlight .s { color: #f1fa8c; }  /* Strings */
-        .highlight .c { color: #6272a4; }  /* Comments */
-        .highlight .n { color: var(--text-primary); }  /* Names */
-        .highlight .o { color: #ff79c6; }  /* Operators */
-        .highlight .p { color: var(--text-primary); }  /* Punctuation */
+        .highlight .k {
+            color: #ff79c6;
+        }
+
+        /* Keywords */
+        .highlight .s {
+            color: #f1fa8c;
+        }
+
+        /* Strings */
+        .highlight .c {
+            color: #6272a4;
+        }
+
+        /* Comments */
+        .highlight .n {
+            color: var(--text-primary);
+        }
+
+        /* Names */
+        .highlight .o {
+            color: #ff79c6;
+        }
+
+        /* Operators */
+        .highlight .p {
+            color: var(--text-primary);
+        }
+
+        /* Punctuation */
 
         /* Privacy badge */
         .privacy-badge {
@@ -305,10 +332,11 @@
             }
         }
     </style>
-    
+
     <!-- Mermaid for diagrams (bundled) -->
     <script src="/static/js/mermaid.min.js"></script>
 </head>
+
 <body>
     <div class="container">
         <!-- Sidebar -->
@@ -323,7 +351,8 @@
             <!-- Search -->
             <div class="search-box">
                 <form action="/search" method="get">
-                    <input type="text" name="q" placeholder="🔍 Search documentation..." value="{{ query if query else '' }}">
+                    <input type="text" name="q" placeholder="🔍 Search documentation..."
+                        value="{{ query if query else '' }}">
                 </form>
             </div>
 
@@ -331,7 +360,7 @@
             <nav>
                 <ul class="file-tree">
                     <li>
-                        <a href="/" {% if not current_path %}class="active"{% endif %}>
+                        <a href="/" {% if not current_path %}class="active" {% endif %}>
                             🏠 Home
                         </a>
                     </li>
@@ -345,11 +374,11 @@
                         </ul>
                         {% endif %}
                         {% elif item.type == 'diagram' %}
-                        <a href="{{ item.path }}" {% if current_path == item.path %}class="active"{% endif %}>
+                        <a href="{{ item.path }}" {% if current_path==item.path %}class="active" {% endif %}>
                             📊 {{ item.name }}
                         </a>
                         {% else %}
-                        <a href="{{ item.path }}" {% if current_path == item.path %}class="active"{% endif %}>
+                        <a href="{{ item.path }}" {% if current_path==item.path %}class="active" {% endif %}>
                             📄 {{ item.name }}
                         </a>
                         {% endif %}
@@ -362,7 +391,9 @@
         <!-- Main Content -->
         <main class="main-content">
             <article class="content">
+                {% block content %}
                 {{ content | safe }}
+                {% endblock %}
             </article>
         </main>
     </div>
@@ -394,4 +425,5 @@
         });
     </script>
 </body>
+
 </html>

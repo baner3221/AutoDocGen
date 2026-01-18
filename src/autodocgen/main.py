@@ -18,6 +18,7 @@ from rich.progress import (
     BarColumn,
     TaskProgressColumn,
     TimeRemainingColumn,
+    TimeElapsedColumn,
 )
 
 from autodocgen import __version__
@@ -82,12 +83,23 @@ def init(
         "--workers", "-w",
         help="Number of parallel workers (overrides config)",
     ),
+    skip_graph: bool = typer.Option(
+        False,
+        "--skip-graph",
+        help="Skip dependency graph extraction (faster runs)",
+    ),
+    auto_retry: bool = typer.Option(
+        True,
+        "--auto-retry/--no-auto-retry",
+        help="Automatically retry failed documentation files",
+    ),
 ):
     """
     Initialize documentation generation for a C++ codebase.
 
     This command performs a full analysis of the codebase and generates
     comprehensive documentation for all classes, functions, and modules.
+    It includes automatic retries for failed files and codebase-wide diagrams.
     """
     print_banner()
     console.print(f"\n[bold green]Initializing documentation for:[/] {codebase}")
@@ -138,7 +150,10 @@ def init(
         task_scan = progress.add_task("Scanning codebase...", total=None)
         
         from autodocgen.analyzer import CodebaseAnalyzer
-        analyzer = CodebaseAnalyzer(config)
+        analyzer = CodebaseAnalyzer(config, skip_graph=skip_graph)
+        
+        if not skip_graph:
+            console.print("[dim]Dependency graph:[/] ENABLED")
         
         file_count = analyzer.scan_codebase()
         progress.update(task_scan, description=f"Found {file_count} C++ files", total=file_count, completed=file_count)
@@ -151,6 +166,32 @@ def init(
         task_doc = progress.add_task("Generating documentation...", total=None)
         analyzer.generate_documentation(progress, task_id=task_doc)
 
+        # 3b. Auto-retry (if enabled)
+        if auto_retry:
+            # We must run this outside the main progress bar context for clean output, 
+            # OR we can inject the logic here but _perform_retry uses its own progress bar/console logic.
+            # Nesting progress bars is messy. 
+            # We'll pause the main progress? Or just run it after.
+            pass # We will run it after existing the context for cleaner UI
+
+    # Run auto-retry out of main progress context
+    if auto_retry:
+        _perform_retry(config.output_path, config, console)
+
+    # Resume main flow for diagrams and index
+    # We need to recreate progress or just run silently? 
+    # Actually, diagrams and index are fast. 
+    # But `generate_diagrams` and `index` were inside the block.
+    # Re-entering progress block is fine.
+    
+    with Progress(
+        SpinnerColumn(spinner_name="simpleDots"),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TimeRemainingColumn(),
+        console=console,
+    ) as progress:
         # 4. Diagrams
         task_diag = progress.add_task("Creating diagrams...", total=None)
         analyzer.generate_diagrams(progress, task_id=task_diag)
@@ -162,6 +203,268 @@ def init(
 
     console.print("\n[bold green][PASS] Documentation generated successfully![/]")
     console.print(f"[dim]View at:[/] {config.output_path}")
+
+
+def _perform_retry(docs_path: Path, config: Config, console: Console):
+    """
+    Internal helper to perform auto-retry logic.
+    """
+    failed_files = detect_failed_docs(docs_path)
+
+    if not failed_files:
+        console.print("[green]No failed documentation files found![/]")
+        return
+
+    console.print(f"[yellow]Found {len(failed_files)} failed documentation file(s) - Retrying...[/]")
+    for failed_doc, source_file in failed_files:
+        console.print(f"  • {failed_doc.name} -> {source_file}")
+
+    # Collect context from successful docs
+    console.print("\n[cyan]Collecting context from successful documentation...[/]")
+    context_summaries = collect_doc_context(docs_path, [f[0] for f in failed_files])
+
+    # Regenerate failed files
+    console.print("\n[cyan]Regenerating failed documentation with context...[/]")
+
+    from autodocgen.analyzer import CodebaseAnalyzer
+    # Create new analyzer with skipped graph for speed
+    analyzer = CodebaseAnalyzer(config, skip_graph=True)
+
+    # Only scan files we need to retry
+    source_files = [f[1] for f in failed_files]
+    for source_file in source_files:
+        if source_file.exists():
+            analyzer._files.append(source_file)
+
+    # Parse and regenerate with context
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TimeElapsedColumn(),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Retrying failed docs...", total=len(source_files))
+
+        for source_file in source_files:
+            progress.update(task, description=f"Retrying {source_file.name}")
+            try:
+                analysis = analyzer.parser.parse_file(source_file)
+                analyzer._analyses[source_file] = analysis
+                analyzer.context_builder.register_analysis(analysis)
+
+                # Regenerate with extra context
+                analyzer._document_file_with_context(
+                    source_file, analysis, context_summaries
+                )
+                console.print(f"  [green][OK][/] {source_file.name}")
+            except Exception as e:
+                console.print(f"  [red][ERR][/] {source_file.name}: {e}")
+
+            progress.advance(task)
+
+
+@app.command()
+def retry(
+    docs: Path = typer.Argument(
+        ...,
+        help="Path to existing documentation directory",
+        exists=True,
+    ),
+    list_only: bool = typer.Option(
+        False,
+        "--list-only", "-l",
+        help="Only list failed files, don't regenerate",
+    ),
+    workers: Optional[int] = typer.Option(
+        None,
+        "--workers", "-w",
+        help="Number of parallel workers",
+    ),
+):
+    """
+    Retry documentation generation for files that failed.
+
+    Scans the documentation directory for files with generation failures
+    and retries them using context from successfully generated docs.
+    """
+    print_banner()
+
+    # Find the config file
+    config_file = docs / "autodocgen.config.json"
+    if not config_file.exists():
+        console.print(f"[red]Error: Config file not found at {config_file}[/]")
+        raise typer.Exit(1)
+
+    # Load config
+    from autodocgen.config import Config
+    config = Config.load_from_file(config_file)
+    if workers is not None:
+        config.llm.parallel_workers = workers
+
+    if list_only:
+        failed_files = detect_failed_docs(docs)
+        if not failed_files:
+             console.print("[green]No failed documentation files found![/]")
+        else:
+            console.print(f"[yellow]Found {len(failed_files)} failed documentation file(s):[/]")
+            for failed_doc, source_file in failed_files:
+                console.print(f"  • {failed_doc.name} -> {source_file}")
+        return
+
+    _perform_retry(docs, config, console)
+    console.print("\n[bold green][PASS] Retry completed![/]")
+
+
+@app.command()
+def diagrams(
+    docs: Path = typer.Argument(
+        ...,
+        help="Path to existing documentation directory",
+        exists=True,
+    ),
+):
+    """
+    Generate class diagrams for existing documentation.
+
+    This generates Mermaid diagrams and appends them to the markdown files
+    if Graphviz is not available.
+    """
+    print_banner()
+
+    # Find the config file
+    config_file = docs / "autodocgen.config.json"
+    if not config_file.exists():
+        console.print(f"[red]Error: Config file not found at {config_file}[/]")
+        raise typer.Exit(1)
+
+    # Load config
+    from autodocgen.config import Config
+    config = Config.load_from_file(config_file)
+
+    console.print(f"\n[bold]Generating diagrams for:[/] {config.codebase_path}")
+    
+    from autodocgen.analyzer import CodebaseAnalyzer
+    
+    # We skip graph extraction as we only need parsing for diagrams
+    analyzer = CodebaseAnalyzer(config, skip_graph=True)
+    
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TimeElapsedColumn(),
+        console=console,
+    ) as progress:
+        
+        # 1. Scan
+        file_count = analyzer.scan_codebase()
+        
+        # 2. Parse (needed to get class info)
+        task_parse = progress.add_task("Parsing C++ files...", total=None)
+        analyzer.parse_all(progress, task_id=task_parse)
+        
+        # 3. Generate Diagrams
+        task_diag = progress.add_task("Generating diagrams...", total=None)
+        analyzer.generate_diagrams(progress, task_id=task_diag)
+
+    console.print("\n[bold green][PASS] Diagrams generated successfully![/]")
+
+
+
+def detect_failed_docs(docs_path: Path) -> list[tuple[Path, Path]]:
+    """
+    Scan documentation directory for files that failed generation.
+
+    Returns:
+        List of (doc_file, source_file) tuples
+    """
+    failed = []
+    failure_marker = "*Documentation generation failed*"
+
+    # Get the config to find source path
+    config_file = docs_path / "autodocgen.config.json"
+    if config_file.exists():
+        import json
+        with open(config_file) as f:
+            cfg = json.load(f)
+        source_root = Path(cfg.get("codebase_path", "."))
+    else:
+        source_root = Path(".")
+
+    # Scan all .md files
+    for md_file in docs_path.rglob("*.md"):
+        if md_file.name == "index.md":
+            continue
+
+        try:
+            content = md_file.read_text(encoding="utf-8")
+            if failure_marker in content or "validation_failed" in content:
+                # Derive source file path from doc path
+                rel_path = md_file.relative_to(docs_path)
+                source_name = rel_path.with_suffix(".h")
+                source_file = source_root / source_name
+
+                # Try .cpp if .h doesn't exist
+                if not source_file.exists():
+                    source_name = rel_path.with_suffix(".cpp")
+                    source_file = source_root / source_name
+
+                failed.append((md_file, source_file))
+        except Exception:
+            pass
+
+    return failed
+
+
+def collect_doc_context(docs_path: Path, failed_docs: list[Path]) -> dict[str, str]:
+    """
+    Collect summaries from successful documentation files to use as context.
+
+    Returns:
+        Dict mapping filename to summary text
+    """
+    context = {}
+
+    for md_file in docs_path.rglob("*.md"):
+        if md_file in failed_docs or md_file.name == "index.md":
+            continue
+
+        try:
+            content = md_file.read_text(encoding="utf-8")
+
+            # Skip if it's a failed file
+            if "*Documentation generation failed*" in content:
+                continue
+
+            # Extract quick summary (first 500 chars of description section)
+            if "## Comprehensive Description" in content or "### 1. Comprehensive Description" in content:
+                # Find the description section
+                lines = content.split("\n")
+                in_desc = False
+                summary_lines = []
+
+                for line in lines:
+                    if "Comprehensive Description" in line:
+                        in_desc = True
+                        continue
+                    if in_desc:
+                        if line.startswith("##") or line.startswith("###"):
+                            break  # Next section
+                        summary_lines.append(line)
+                        if len("\n".join(summary_lines)) > 400:
+                            break
+
+                summary = "\n".join(summary_lines).strip()
+                if summary:
+                    context[md_file.stem] = summary
+
+        except Exception:
+            pass
+
+    return context
 
 
 @app.command()
@@ -268,6 +571,12 @@ def analyze(
     from autodocgen.generator import DocumentationGenerator
 
     config = get_default_config(file_path.parent)
+
+    # Auto-detect include directory (sibling to src?)
+    possible_include = file_path.parent.parent / "include"
+    if possible_include.exists():
+        console.print(f"[dim]Auto-adding include path:[/] {possible_include}")
+        config.parser.include_paths.append(str(possible_include))
 
     parser = CppParser(config)
     analysis = parser.parse_file(file_path)

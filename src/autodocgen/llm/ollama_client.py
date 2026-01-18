@@ -129,6 +129,7 @@ class OllamaClient:
                 "temperature": self.config.llm.temperature,
                 "num_predict": self.config.llm.get_effective_max_tokens(),
                 "num_ctx": self.config.llm.get_effective_context(),
+                "num_gpu": self.config.llm.gpu_layers,  # 0 = CPU only (fixes CUDA errors)
             },
         }
 
@@ -143,7 +144,7 @@ class OllamaClient:
                 method="POST",
             )
 
-            with urlopen(req, timeout=300) as response:  # 5 min timeout for long generations
+            with urlopen(req, timeout=600) as response:  # 10 min timeout for slow systems
                 data = json.loads(response.read().decode())
 
                 result = LLMResponse(

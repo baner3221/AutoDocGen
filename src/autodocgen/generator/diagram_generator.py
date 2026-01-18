@@ -78,6 +78,82 @@ class DiagramGenerator:
         except subprocess.CalledProcessError:
             return False
 
+    def generate_mermaid(
+        self,
+        classes: list[ClassInfo],
+        title: Optional[str] = None,
+    ) -> str:
+        """Generate Mermaid class diagram source."""
+        lines = ["classDiagram"]
+        
+        # Track all class names for relationship resolution
+        class_names = {cls.qualified_name for cls in classes}
+        class_names.update({cls.name for cls in classes})
+        
+        # Generate classes
+        for cls in classes:
+            safe_name = self._sanitize_id(cls.qualified_name)
+            
+            # Add class definition
+            if cls.kind.value == "struct":
+                 lines.append(f"    class {safe_name} {{")
+                 lines.append("        <<struct>>")
+            else:
+                 lines.append(f"    class {safe_name} {{")
+            
+            # Add methods (limit 10)
+            if cls.public_methods:
+                for method in cls.public_methods[:10]:
+                    prefix = "+" if method.access.value == "public" else "#"
+                    # Sanitize method name
+                    name = method.name.replace("~", "destroy_").replace("operator=", "operator_assign").replace("operator", "op_")
+                    
+                    # Sanitize params (remove types just keep names to keep it short, or simplified)
+                    params = ", ".join(p.name for p in method.parameters)
+                    if len(params) > 20:
+                        params = "..."
+                        
+                    lines.append(f"        {prefix}{name}({params})")
+            
+            lines.append("    }")
+            
+        # Relationships
+        for cls in classes:
+            safe_name = self._sanitize_id(cls.qualified_name)
+            
+            # Inheritance
+            for base in cls.base_classes:
+                base_name = self._clean_base_name(base)
+                # Find the matched class in the list to get its fully qualified name
+                matched_base = next((c for c in classes if c.name == base_name or c.qualified_name.endswith("::" + base_name)), None)
+                
+                # If found, use its sanitized ID, otherwise check simple name
+                if matched_base:
+                    base_id = self._sanitize_id(matched_base.qualified_name)
+                    lines.append(f"    {base_id} <|-- {safe_name}")
+                elif base_name in class_names: # Fallback if specific class not found but name exists
+                     # This fallback might be risky if names are ambiguous, but better than nothing
+                     # However, since we keyed class_names by qualified and simple names, we need to know which one it is.
+                     # If we can't find the object, we can't get the qualified name. 
+                     # Let's try to assume it matches one of the qualified names if simplest match works
+                     pass 
+
+            # Composition/Aggregation
+            for member in cls.members:
+                member_type = self._extract_type_name(member.type_spelling)
+                
+                 # Find the matched class
+                matched_member = next((c for c in classes if c.name == member_type or c.qualified_name.endswith("::" + member_type)), None)
+                
+                if matched_member and matched_member.qualified_name != cls.qualified_name:
+                    member_id = self._sanitize_id(matched_member.qualified_name)
+                    # Check if pointer/reference for aggregation vs composition
+                    is_pointer = "*" in member.type_spelling or "ptr" in member.type_spelling
+                    arrow = "o--" if is_pointer else "*--"
+                    lines.append(f"    {safe_name} {arrow} {member_id} : {member.name}")
+
+        return "\n".join(lines)
+
     def _generate_dot(
         self,
         classes: list[ClassInfo],

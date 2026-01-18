@@ -139,12 +139,15 @@ class IntelligentChunker:
         groups: dict[str, list[FunctionInfo]] = {}
 
         for func in functions:
-            # Try to find a common prefix
-            prefix = self._get_function_prefix(func.name)
+            # Disable prefix grouping to avoid massive chunks spanning unrelated functions
+            # prefix = self._get_function_prefix(func.name)
+            prefix = ""
+            
             if prefix:
                 group_name = f"{prefix}_functions"
             else:
-                group_name = "misc_functions"
+                # Use function name for ungrouped functions to avoid large miscellaneous chunks
+                group_name = func.qualified_name
 
             if group_name not in groups:
                 groups[group_name] = []
@@ -231,6 +234,11 @@ class IntelligentChunker:
         final_boundaries = self._split_large_boundaries(merged, lines)
 
         total_chunks = len(final_boundaries)
+
+        # Debug: Print chunk boundaries
+        print(f"[debug] Created {total_chunks} chunks for {file_path.name}:")
+        for b in final_boundaries:
+            print(f"  - Chunk: {b.symbol_name} (lines {b.line_start}-{b.line_end}) Type: {b.symbol_type}")
 
         for i, boundary in enumerate(final_boundaries):
             # Get the code for this boundary

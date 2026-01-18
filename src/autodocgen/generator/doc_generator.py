@@ -266,10 +266,30 @@ class DocumentationGenerator:
         relative = file_path.relative_to(self.config.codebase_path)
         diagram_path = self.output_path / "diagrams" / relative.with_suffix(".svg")
 
-        self.diagram_generator.generate_class_diagram(
+        # Try generating SVG (requires Graphviz)
+        svg_generated = self.diagram_generator.generate_class_diagram(
             analysis.all_classes,
             diagram_path,
         )
+
+        # If SVG failed (e.g. no dot), append Mermaid to markdown
+        # If SVG failed (e.g. no dot), append Mermaid to markdown
+        if not svg_generated:
+            # User requested to NOT display per-file diagrams in the markdown files
+            # So we skip appending here. 
+            pass 
+            # mermaid_source = self.diagram_generator.generate_mermaid(
+            #     analysis.all_classes,
+            # )
+            # 
+            # # Append to module doc
+            # doc_path = self.output_path / relative.with_suffix(".md")
+            # if doc_path.exists():
+            #     content = doc_path.read_text(encoding="utf-8")
+            #     if "## Class Diagram" not in content:
+            #         content += "\n\n## Class Diagram\n\n```mermaid\n" + mermaid_source + "\n```\n"
+            #         doc_path.write_text(content, encoding="utf-8")
+
 
     def generate_codebase_diagram(
         self,
@@ -284,15 +304,35 @@ class DocumentationGenerator:
         if not self.config.documentation.generate_diagrams:
             return
 
+        # Aggregate all classes
         all_classes = []
         for analysis in analyses.values():
             all_classes.extend(analysis.all_classes)
 
         if not all_classes:
             return
-
-        diagram_path = self.output_path / "diagrams" / "codebase_overview.svg"
-        self.diagram_generator.generate_class_diagram(all_classes, diagram_path)
+            
+        diagrams_dir = self.output_path / "diagrams"
+        diagrams_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 1. Try Graphviz SVG
+        svg_path = diagrams_dir / "codebase_overview.svg"
+        svg_generated = self.diagram_generator.generate_class_diagram(
+            all_classes,
+            svg_path,
+            title="Codebase Overview"
+        )
+        
+        # 2. Generate Mermaid Markdown (always generate this for the web view fallback)
+        mermaid_path = diagrams_dir / "codebase_overview.md"
+        mermaid_source = self.diagram_generator.generate_mermaid(
+            all_classes,
+            title="Codebase Overview"
+        )
+        
+        # Wrap in HTML div for direct rendering
+        content = f"# Codebase Overview\n\n<div class=\"mermaid\">\n{mermaid_source}\n</div>\n"
+        mermaid_path.write_text(content, encoding="utf-8")
 
     def generate_index(self, analyses: dict[Path, CppFileAnalysis]) -> Path:
         """

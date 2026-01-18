@@ -38,10 +38,10 @@ class LLMConfig(BaseModel):
         description="llama.cpp server port"
     )
 
-    # Model settings - DEFAULT TO LIGHTWEIGHT 7B MODEL
+    # Model settings - DEFAULT TO LIGHTWEIGHT 3B MODEL FOR FASTER GENERATION
     model_name: str = Field(
-        default="qwen2.5-coder:7b",
-        description="Model name to use for analysis (default: lightweight 7B)"
+        default="qwen2.5-coder:3b",
+        description="Model name to use for analysis (default: fast 3B)"
     )
     model_path: Optional[Path] = Field(
         default=None,
@@ -68,23 +68,38 @@ class LLMConfig(BaseModel):
         description="Maximum tokens to generate per response (reduced for speed)"
     )
 
-    # GPU offloading
+    # GPU offloading - 35 layers fits 3B model in 4GB VRAM
     gpu_layers: int = Field(
-        default=0,
-        description="Number of layers to offload to GPU (0 = CPU only)"
+        default=35,
+        description="Number of layers to offload to GPU (0 = CPU only, 35 = 3B model on 4GB GPU)"
+    )
+
+    # Remote LLM server support (for using a separate machine on LAN)
+    allow_remote_host: bool = Field(
+        default=False,
+        description="Allow non-localhost LLM hosts (use for LAN servers)"
     )
 
     @field_validator("ollama_host", "llamacpp_host")
     @classmethod
-    def validate_localhost(cls, v: str) -> str:
-        """Ensure host is localhost for security."""
-        allowed = {"127.0.0.1", "localhost", "::1"}
-        if v not in allowed:
-            raise ValueError(
-                f"Host must be localhost for security. Got '{v}'. "
-                f"Allowed values: {allowed}"
-            )
-        return v
+    def validate_host(cls, v: str, info) -> str:
+        """Validate host - allow remote only if explicitly enabled."""
+        localhost_values = {"127.0.0.1", "localhost", "::1"}
+        
+        # Always allow localhost
+        if v in localhost_values:
+            return v
+        
+        # For non-localhost, we'll validate at runtime when allow_remote_host is known
+        # Basic validation: must be IP or hostname format
+        import re
+        ip_pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
+        hostname_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$'
+        
+        if re.match(ip_pattern, v) or re.match(hostname_pattern, v):
+            return v
+        
+        raise ValueError(f"Invalid host format: '{v}'")
 
     def get_base_url(self) -> str:
         """Get the base URL for LLM API calls."""

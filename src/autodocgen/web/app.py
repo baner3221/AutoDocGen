@@ -125,6 +125,49 @@ def create_app(docs_path: Path) -> Flask:
         """Serve static assets."""
         return send_from_directory(app.static_folder, filepath)
 
+    @app.route("/diagrams")
+    def diagrams():
+        """Serve the codebase overview diagram."""
+        # Look for codebase_overview.md
+        diagram_path = docs_path / "diagrams" / "codebase_overview.md"
+        
+        if not diagram_path.exists():
+            # Fallback to checking if there are any SVGs
+            diagram_path_svg = docs_path / "diagrams" / "codebase_overview.svg"
+            if diagram_path_svg.exists():
+                return send_from_directory(
+                    str(docs_path / "diagrams"),
+                    "codebase_overview.svg",
+                )
+            
+            return render_template(
+                "base.html",
+                title="Diagrams",
+                content="<h1>Codebase Diagrams</h1><p>No diagrams generated yet. Run <code>autodocgen diagrams</code> to generate them.</p><p><small>Note: Install Graphviz (dot) for static SVG generation.</small></p>",
+                tree=get_file_tree(docs_path),
+                current_path="/diagrams"
+            )
+            
+        content = diagram_path.read_text(encoding="utf-8")
+        
+        # Extract raw mermaid source from the div wrapper
+        # Previous format: <div class="mermaid">\nSOURCE\n</div>
+        match = re.search(r'<div class="mermaid">\s*(.*?)\s*</div>', content, re.DOTALL)
+        if match:
+            diagram_source = match.group(1)
+        else:
+            # Fallback if format is different (e.g. legacy markdown fence)
+            match_fence = re.search(r'```mermaid\s*(.*?)\s*```', content, re.DOTALL)
+            diagram_source = match_fence.group(1) if match_fence else "graph TD; A[Error: Could not parse diagram source];"
+
+        return render_template(
+            "diagram_viewer.html",
+            title="Codebase Diagrams",
+            diagram_source=diagram_source,
+            tree=get_file_tree(docs_path),
+            current_path="/diagrams"
+        )
+
     return app
 
 
@@ -260,7 +303,18 @@ def get_file_tree(docs_path: Path) -> list:
     if docs_path.exists():
         add_to_tree(docs_path, tree, docs_path)
 
+    # Add Diagrams link explicitly at the top
+    tree.insert(0, {
+        "name": "Codebase Diagrams",
+        "type": "diagram",
+        "path": "/diagrams",
+        "children": []
+    })
+    
     return tree
+
+
+    return app
 
 
 def search_docs(docs_path: Path, query: str) -> list:
