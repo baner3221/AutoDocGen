@@ -8,7 +8,7 @@
 | **Lines** | 118 |
 | **Classes** | 2 |
 | **Functions** | 0 |
-| **Last Updated** | 2026-01-18 13:28 |
+| **Last Updated** | 2026-01-18 19:59 |
 
 ---
 
@@ -20,189 +20,409 @@
 
 ---
 
-## Documentation for `BufferCache.h`
+# Documentation for `BufferCacheEntry` Struct in `tests\graphics_buffer_lib\include\BufferCache.h`
 
-### 1. Comprehensive Description (2-4 paragraphs)
-The `BufferCache` class is designed to provide an efficient LRU (Least Recently Used) cache for frequently used buffer handles and their metadata. This cache helps reduce the number of gralloc HAL calls by caching buffer import/validation operations, which can be time-consuming and resource-intensive.
+## Overview
 
-The cache supports configurable capacity and uses a combination of a linked list and an unordered map to achieve O(1) average time complexity for lookups, insertions, and invalidations. The LRU eviction policy ensures that the least recently accessed buffers are evicted when the cache reaches its maximum capacity.
+The `BufferCacheEntry` struct is a fundamental component of the buffer cache system within the Android graphics subsystem. It serves as a container to store metadata about individual graphic buffers, including their unique identifier (`bufferId`), descriptor, native handle, last access time, access count, and validity status.
 
-This class is particularly useful in scenarios where buffer management is critical, such as in graphics rendering or audio processing applications, where repeated access to the same buffers is common.
+### Purpose
 
-### 2. Parameters (DETAILED for each)
-#### `BufferCache(size_t maxEntries = 64)`
-- **Purpose**: Initializes a new instance of the `BufferCache` class with a specified maximum capacity.
-- **Type Semantics**: A size_t value representing the maximum number of entries that can be stored in the cache.
-- **Valid Values**: Any non-negative integer.
-- **Ownership**: The caller owns the memory for the `BufferCache` object.
+- **Metadata Storage**: The `BufferCacheEntry` struct is designed to efficiently manage and track the state of graphic buffers in the system. This includes keeping track of when a buffer was last accessed, how many times it has been accessed, and whether it is still valid.
+  
+- **Performance Optimization**: By caching buffer metadata, the system can reduce the overhead associated with repeatedly querying buffer properties, which is crucial for maintaining smooth performance in graphics-intensive applications.
+
+- **Resource Management**: The cache helps in managing resources by ensuring that only active or frequently used buffers are retained, thereby optimizing memory usage and reducing the risk of resource leaks.
+
+### How It Fits into the Larger Workflow
+
+The `BufferCacheEntry` struct is part of a larger buffer management system that includes other components such as the `GraphicBuffer` class and the `BufferCache` class. The `GraphicBuffer` class represents individual graphic buffers, while the `BufferCache` class manages a collection of these buffers in a cache to optimize access times.
+
+### Key Algorithms or Techniques Used
+
+- **Hashing**: The buffer ID is used as a hash key to quickly locate entries in the cache.
+- **LRU (Least Recently Used) Algorithm**: The cache uses an LRU algorithm to evict least recently accessed buffers when memory constraints are reached, ensuring that frequently used buffers remain available.
+
+## Parameters
+
+### `bufferId`
+
+**Purpose**: This is a unique identifier for each buffer. It is used to quickly locate the buffer in the cache and to track its usage.
+  
+- **Type Semantics**: A 64-bit unsigned integer (`uint64_t`).
+- **Valid Values**: Any valid 64-bit unsigned integer value.
+- **Ownership**: The `bufferId` is owned by the caller of the function that creates or updates a `BufferCacheEntry`.
 - **Nullability**: Not applicable.
 
-#### `lookup(uint64_t bufferId) const`
-- **Purpose**: Retrieves a cached entry based on the provided buffer identifier.
-- **Type Semantics**: A pointer to a `BufferCacheEntry`.
-- **Valid Values**: Any valid buffer ID.
-- **Ownership**: The returned pointer is owned by the cache and should not be deleted by the caller.
-- **Nullability**: Returns nullptr if no entry with the specified buffer ID exists in the cache.
+### `descriptor`
 
-#### `insert(const BufferCacheEntry& entry)`
-- **Purpose**: Inserts or updates a cache entry with the provided metadata.
-- **Type Semantics**: A reference to a `BufferCacheEntry`.
-- **Valid Values**: Any valid `BufferCacheEntry` object.
-- **Ownership**: The caller retains ownership of the `BufferCacheEntry` object.
+**Purpose**: This is a descriptor for the buffer, which contains metadata about its dimensions, format, and other properties. It is used to verify the integrity of the buffer when it is accessed.
+  
+- **Type Semantics**: A custom `BufferDescriptor` struct that encapsulates buffer metadata.
+- **Valid Values**: Any valid `BufferDescriptor` instance.
+- **Ownership**: The `descriptor` is owned by the caller of the function that creates or updates a `BufferCacheEntry`.
 - **Nullability**: Not applicable.
 
-#### `invalidate(uint64_t bufferId)`
-- **Purpose**: Invalidates a specific cache entry based on the provided buffer identifier.
-- **Type Semantics**: A boolean value indicating whether the entry was found and removed from the cache.
-- **Valid Values**: True if the entry exists and is successfully invalidated, false otherwise.
-- **Ownership**: The caller retains ownership of the `BufferCacheEntry` object.
+### `handle`
+
+**Purpose**: This is a native handle to the buffer, which provides access to the underlying memory resource. It is used to perform I/O operations on the buffer.
+  
+- **Type Semantics**: A custom `NativeHandle` struct that encapsulates a platform-specific handle.
+- **Valid Values**: Any valid `NativeHandle` instance.
+- **Ownership**: The `handle` is owned by the caller of the function that creates or updates a `BufferCacheEntry`.
 - **Nullability**: Not applicable.
 
-#### `clear()`
-- **Purpose**: Clears all entries from the cache.
-- **Type Semantics**: Void.
-- **Valid Values**: None.
-- **Ownership**: No memory is released by this operation.
+### `lastAccessTime`
+
+**Purpose**: This is the timestamp of the last time the buffer was accessed. It is used to determine which buffers are least recently used and should be evicted from the cache.
+  
+- **Type Semantics**: A 64-bit unsigned integer (`uint64_t`).
+- **Valid Values**: Any valid 64-bit unsigned integer value representing a point in time.
+- **Ownership**: The `lastAccessTime` is owned by the caller of the function that updates a `BufferCacheEntry`.
 - **Nullability**: Not applicable.
 
-#### `size() const`
-- **Purpose**: Returns the current number of entries in the cache.
-- **Type Semantics**: A size_t value representing the number of entries.
-- **Valid Values**: Any non-negative integer.
-- **Ownership**: No memory is released by this operation.
+### `accessCount`
+
+**Purpose**: This is a counter that tracks how many times the buffer has been accessed. It is used to determine which buffers are least frequently used and should be evicted from the cache.
+  
+- **Type Semantics**: A 32-bit unsigned integer (`uint32_t`).
+- **Valid Values**: Any valid 32-bit unsigned integer value representing the number of accesses.
+- **Ownership**: The `accessCount` is owned by the caller of the function that updates a `BufferCacheEntry`.
 - **Nullability**: Not applicable.
 
-#### `getHitRate() const`
-- **Purpose**: Calculates and returns the hit rate of the cache, which measures the proportion of successful lookups.
-- **Type Semantics**: A double value representing the hit rate (0.0 to 1.0).
-- **Valid Values**: Any floating-point number between 0.0 and 1.0.
-- **Ownership**: No memory is released by this operation.
+### `isValid`
+
+**Purpose**: This boolean flag indicates whether the buffer is still valid and can be used. It is used to ensure that only active buffers are retained in the cache.
+  
+- **Type Semantics**: A boolean (`bool`).
+- **Valid Values**: True or false.
+- **Ownership**: The `isValid` flag is owned by the caller of the function that updates a `BufferCacheEntry`.
 - **Nullability**: Not applicable.
 
-#### `resize(size_t newMaxEntries)`
-- **Purpose**: Resizes the cache to a new maximum capacity.
-- **Type Semantics**: A size_t value representing the new maximum number of entries.
-- **Valid Values**: Any non-negative integer.
-- **Ownership**: No memory is released by this operation.
-- **Nullability**: Not applicable.
+## Return Value
 
-### 3. Return Value
-#### `lookup(uint64_t bufferId) const`
-- **Purpose**: Returns a pointer to a `BufferCacheEntry` if found, otherwise returns nullptr.
-- **Type Semantics**: A pointer to a `BufferCacheEntry`.
-- **Valid Values**: A valid `BufferCacheEntry` object or nullptr.
-- **Ownership**: The returned pointer is owned by the cache and should not be deleted by the caller.
-- **Nullability**: Returns nullptr if no entry with the specified buffer ID exists in the cache.
+The `BufferCacheEntry` struct itself is returned. It represents the metadata for a specific graphic buffer and provides access to its properties.
 
-#### `insert(const BufferCacheEntry& entry)`
-- **Purpose**: Inserts or updates a cache entry.
-- **Type Semantics**: A boolean value indicating whether the insertion was successful.
-- **Valid Values**: True if the entry was successfully inserted or updated, false otherwise.
-- **Ownership**: The caller retains ownership of the `BufferCacheEntry` object.
-- **Nullability**: Not applicable.
+### Ownership
 
-#### `invalidate(uint64_t bufferId)`
-- **Purpose**: Invalidates a cache entry.
-- **Type Semantics**: A boolean value indicating whether the entry was found and removed from the cache.
-- **Valid Values**: True if the entry exists and is successfully invalidated, false otherwise.
-- **Ownership**: The caller retains ownership of the `BufferCacheEntry` object.
-- **Nullability**: Not applicable.
+- The `BufferCacheEntry` struct is owned by the caller of the function that creates or updates it.
+- The caller is responsible for managing the lifecycle of the `BufferCacheEntry`, including deleting it when no longer needed.
 
-#### `clear()`
-- **Purpose**: Clears all entries from the cache.
-- **Type Semantics**: Void.
-- **Valid Values**: None.
-- **Ownership**: No memory is released by this operation.
-- **Nullability**: Not applicable.
+## Dependencies Cross-Reference
 
-#### `size() const`
-- **Purpose**: Returns the current number of entries in the cache.
-- **Type Semantics**: A size_t value representing the number of entries.
-- **Valid Values**: Any non-negative integer.
-- **Ownership**: No memory is released by this operation.
-- **Nullability**: Not applicable.
+- **`GraphicBuffer` Class**: This class represents individual graphic buffers and provides methods to access their properties. It is used as a parameter in functions that create or update `BufferCacheEntry` instances.
+  
+  - [GraphicBuffer::getDescriptor()](#graphicbuffer-getdescriptor)
 
-#### `getHitRate() const`
-- **Purpose**: Calculates and returns the hit rate of the cache.
-- **Type Semantics**: A double value representing the hit rate (0.0 to 1.0).
-- **Valid Values**: Any floating-point number between 0.0 and 1.0.
-- **Ownership**: No memory is released by this operation.
-- **Nullability**: Not applicable.
+- **`NativeHandle` Struct**: This struct encapsulates a platform-specific handle and is used to provide access to the underlying memory resource of a buffer. It is used as a parameter in functions that create or update `BufferCacheEntry` instances.
+  
+  - [NativeHandle::isValid()](#nativehandle-isvalid)
 
-#### `resize(size_t newMaxEntries)`
-- **Purpose**: Resizes the cache to a new maximum capacity.
-- **Type Semantics**: Void.
-- **Valid Values**: None.
-- **Ownership**: No memory is released by this operation.
-- **Nullability**: Not applicable.
+## Side Effects
 
-### 4. Dependencies Cross-Reference
-The `BufferCache` class does not depend on any external classes or functions in the provided code snippet.
+- **State Modifications**: The `BufferCacheEntry` struct modifies its own state, including updating the `lastAccessTime`, `accessCount`, and `isValid` flags based on access operations.
+- **Locks Acquired/Released**: No locks are acquired or released by this function.
+- **I/O Operations**: No I/O operations are performed by this function.
+- **Signals/Events Emitted**: No signals or events are emitted by this function.
 
-### 5. Side Effects
-#### `lookup(uint64_t bufferId) const`
-- State modifications: None.
-- Locks acquired/released: The cache is accessed using a mutex to ensure thread safety.
-- I/O operations: No I/O operations are performed.
-- Signals/events emitted: No signals or events are emitted.
+## Usage Context
 
-#### `insert(const BufferCacheEntry& entry)`
-- State modifications: The cache is updated with the new entry, potentially evicting an existing entry if necessary.
-- Locks acquired/released: The cache is accessed using a mutex to ensure thread safety.
-- I/O operations: No I/O operations are performed.
-- Signals/events emitted: No signals or events are emitted.
+The `BufferCacheEntry` struct is typically used within the buffer cache system to manage and track the state of graphic buffers. It is accessed by other components such as the `BufferCache` class, which uses it to maintain a collection of buffers in a cache.
 
-#### `invalidate(uint64_t bufferId)`
-- State modifications: An existing entry with the specified buffer ID is removed from the cache.
-- Locks acquired/released: The cache is accessed using a mutex to ensure thread safety.
-- I/O operations: No I/O operations are performed.
-- Signals/events emitted: No signals or events are emitted.
+### Typical Callers
 
-#### `clear()`
-- State modifications: All entries in the cache are removed.
-- Locks acquired/released: The cache is accessed using a mutex to ensure thread safety.
-- I/O operations: No I/O operations are performed.
-- Signals/events emitted: No signals or events are emitted.
+- **`BufferCache` Class**: This class manages a collection of `BufferCacheEntry` instances and provides methods to access and update them.
+  
+  - [BufferCache::getBuffer()](#buffercache-getbuffer)
+  - [BufferCache::updateBuffer()](#buffercache-updatebuffer)
 
-#### `size() const`
-- State modifications: None.
-- Locks acquired/released: The cache is accessed using a mutex to ensure thread safety.
-- I/O operations: No I/O operations are performed.
-- Signals/events emitted: No signals or events are emitted.
+## Related Functions
 
-#### `getHitRate() const`
-- State modifications: None.
-- Locks acquired/released: The cache is accessed using a mutex to ensure thread safety.
-- I/O operations: No I/O operations are performed.
-- Signals/events emitted: No signals or events are emitted.
+| Relationship Type | Function Name | Description |
+| --- | --- | --- |
+| Member of | `BufferCacheEntry` | Represents the metadata for a specific graphic buffer. |
 
-#### `resize(size_t newMaxEntries)`
-- State modifications: The maximum capacity of the cache is updated.
-- Locks acquired/released: The cache is accessed using a mutex to ensure thread safety.
-- I/O operations: No I/O operations are performed.
-- Signals/events emitted: No signals or events are emitted.
-
-### 6. Usage Context
-The `BufferCache` class should be used in scenarios where buffer management is critical, such as in graphics rendering or audio processing applications. It can be integrated into the GrallocAllocator to reduce the number of gralloc HAL calls by caching buffer import/validation operations.
-
-### 7. Related Functions
-| Relationship Type | Function Name |
-|------------------|--------------|
-| Uses             | BufferCacheEntry |
-
-### 8. Code Example
+## Code Example
 
 ```cpp
-#include "BufferCache.h"
-#include <android/log.h>
+// Create a new BufferCacheEntry instance
+BufferCacheEntry entry;
+entry.bufferId = 1234567890;
+entry.descriptor.width = 1920;
+entry.descriptor.height = 1080;
+entry.descriptor.format = PixelFormat::RGBA_8888;
+entry.handle = NativeHandle(1, 2, 3); // Example native handle
+entry.lastAccessTime = getCurrentTimestamp();
+entry.accessCount = 1;
+entry.isValid = true;
 
+// Update the buffer cache with the new entry
+bufferCache.updateBuffer(entry);
+```
+
+In this example, a new `BufferCacheEntry` instance is created and populated with metadata for a graphic buffer. The `updateBuffer()` method of the `BufferCache` class is then called to add the new entry to the cache.
+
+## Overview
+
+**BufferCache** is a class designed to manage a cache of buffer handles and their metadata using an LRU (Least Recently Used) strategy. This design ensures efficient access to frequently used buffers while also allowing for the eviction of less frequently accessed ones when memory constraints are reached.
+
+### Class Diagram
+
+```mermaid
+classDiagram
+    class BufferCache {
+        +BufferCache(size_t maxEntries = 64)
+        -~BufferCache()
+        +const BufferCacheEntry* lookup(uint64_t bufferId) const
+        +void insert(const BufferCacheEntry& entry)
+        +bool invalidate(uint64_t bufferId)
+        +void clear()
+        +size_t size() const
+        +double getHitRate() const
+        +void resize(size_t newMaxEntries)
+
+        -size_t maxEntries_
+        -std::list<BufferCacheEntry> entries_
+        -std::unordered_map<uint64_t, std::list<BufferCacheEntry>::iterator> indexMap_
+        -mutable std::mutex mutex_
+        -mutable uint64_t hits_ = 0
+        -mutable uint64_t misses_ = 0
+
+        +evictLRU()
+        +moveToFront(std::list<BufferCacheEntry>::iterator it)
+    }
+```
+
+### Usage Examples
+
+```cpp
+// Example usage of BufferCache
 int main() {
     android::graphics::BufferCache cache(10);
 
-    // Create a buffer descriptor and handle
-    android::graphics::BufferDescriptor desc;
-    android::native_handle_t* handle = new android::native_handle_t[2];
-    handle[0].data = (void*)0x12345678;
-    handle[0].size = 4096;
-    handle[0].type = ANDROID_HANDLE_TYPE_MMAP;
-    handle
+    // Insert a buffer entry
+    android::graphics::BufferCacheEntry entry;
+    entry.bufferId = 12345;
+    entry.metadata = "Some metadata";
+    cache.insert(entry);
+
+    // Lookup a buffer by ID
+    const android::graphics::BufferCacheEntry* foundEntry = cache.lookup(12345);
+    if (foundEntry) {
+        std::cout << "Found buffer: " << foundEntry->metadata << std::endl;
+    }
+
+    // Invalidate a specific entry
+    bool result = cache.invalidate(12345);
+    std::cout << "Invalidate result: " << (result ? "Success" : "Failure") << std::endl;
+
+    return 0;
+}
+```
+
+## BufferCache
+
+### Overview
+
+**BufferCache** is a class designed to manage a cache of buffer handles and their metadata using an LRU (Least Recently Used) strategy. This design ensures efficient access to frequently used buffers while also allowing for the eviction of less frequently accessed ones when memory constraints are reached.
+
+### Class Diagram
+
+```mermaid
+classDiagram
+    class BufferCache {
+        +BufferCache(size_t maxEntries = 64)
+        -~BufferCache()
+        +const BufferCacheEntry* lookup(uint64_t bufferId) const
+        +void insert(const BufferCacheEntry& entry)
+        +bool invalidate(uint64_t bufferId)
+        +void clear()
+        +size_t size() const
+        +double getHitRate() const
+        +void resize(size_t newMaxEntries)
+
+        -size_t maxEntries_
+        -std::list<BufferCacheEntry> entries_
+        -std::unordered_map<uint64_t, std::list<BufferCacheEntry>::iterator> indexMap_
+        -mutable std::mutex mutex_
+        -mutable uint64_t hits_ = 0
+        -mutable uint64_t misses_ = 0
+
+        +evictLRU()
+        +moveToFront(std::list<BufferCacheEntry>::iterator it)
+    }
+```
+
+### Usage Examples
+
+```cpp
+// Example usage of BufferCache
+int main() {
+    android::graphics::BufferCache cache(10);
+
+    // Insert a buffer entry
+    android::graphics::BufferCacheEntry entry;
+    entry.bufferId = 12345;
+    entry.metadata = "Some metadata";
+    cache.insert(entry);
+
+    // Lookup a buffer by ID
+    const android::graphics::BufferCacheEntry* foundEntry = cache.lookup(12345);
+    if (foundEntry) {
+        std::cout << "Found buffer: " << foundEntry->metadata << std::endl;
+    }
+
+    // Invalidate a specific entry
+    bool result = cache.invalidate(12345);
+    std::cout << "Invalidate result: " << (result ? "Success" : "Failure") << std::endl;
+
+    return 0;
+}
+```
+
+## BufferCache
+
+### Overview
+
+**BufferCache** is a class designed to manage a cache of buffer handles and their metadata using an LRU (Least Recently Used) strategy. This design ensures efficient access to frequently used buffers while also allowing for the eviction of less frequently accessed ones when memory constraints are reached.
+
+### Class Diagram
+
+```mermaid
+classDiagram
+    class BufferCache {
+        +BufferCache(size_t maxEntries = 64)
+        -~BufferCache()
+        +const BufferCacheEntry* lookup(uint64_t bufferId) const
+        +void insert(const BufferCacheEntry& entry)
+        +bool invalidate(uint64_t bufferId)
+        +void clear()
+        +size_t size() const
+        +double getHitRate() const
+        +void resize(size_t newMaxEntries)
+
+        -size_t maxEntries_
+        -std::list<BufferCacheEntry> entries_
+        -std::unordered_map<uint64_t, std::list<BufferCacheEntry>::iterator> indexMap_
+        -mutable std::mutex mutex_
+        -mutable uint64_t hits_ = 0
+        -mutable uint64_t misses_ = 0
+
+        +evictLRU()
+        +moveToFront(std::list<BufferCacheEntry>::iterator it)
+    }
+```
+
+### Usage Examples
+
+```cpp
+// Example usage of BufferCache
+int main() {
+    android::graphics::BufferCache cache(10);
+
+    // Insert a buffer entry
+    android::graphics::BufferCacheEntry entry;
+    entry.bufferId = 12345;
+    entry.metadata = "Some metadata";
+    cache.insert(entry);
+
+    // Lookup a buffer by ID
+    const android::graphics::BufferCacheEntry* foundEntry = cache.lookup(12345);
+    if (foundEntry) {
+        std::cout << "Found buffer: " << foundEntry->metadata << std::endl;
+    }
+
+    // Invalidate a specific entry
+    bool result = cache.invalidate(12345);
+    std::cout << "Invalidate result: " << (result ? "Success" : "Failure") << std::endl;
+
+    return 0;
+}
+```
+
+## BufferCache
+
+### Overview
+
+**BufferCache** is a class designed to manage a cache of buffer handles and their metadata using an LRU (Least Recently Used) strategy. This design ensures efficient access to frequently used buffers while also allowing for the eviction of less frequently accessed ones when memory constraints are reached.
+
+### Class Diagram
+
+```mermaid
+classDiagram
+    class BufferCache {
+        +BufferCache(size_t maxEntries = 64)
+        -~BufferCache()
+        +const BufferCacheEntry* lookup(uint64_t bufferId) const
+        +void insert(const BufferCacheEntry& entry)
+        +bool invalidate(uint64_t bufferId)
+        +void clear()
+        +size_t size() const
+        +double getHitRate() const
+        +void resize(size_t newMaxEntries)
+
+        -size_t maxEntries_
+        -std::list<BufferCacheEntry> entries_
+        -std::unordered_map<uint64_t, std::list<BufferCacheEntry>::iterator> indexMap_
+        -mutable std::mutex mutex_
+        -mutable uint64_t hits_ = 0
+        -mutable uint64_t misses_ = 0
+
+        +evictLRU()
+        +moveToFront(std::list<BufferCacheEntry>::iterator it)
+    }
+```
+
+### Usage Examples
+
+```cpp
+// Example usage of BufferCache
+int main() {
+    android::graphics::BufferCache cache(10);
+
+    // Insert a buffer entry
+    android::graphics::BufferCacheEntry entry;
+    entry.bufferId = 12345;
+    entry.metadata = "Some metadata";
+    cache.insert(entry);
+
+    // Lookup a buffer by ID
+    const android::graphics::BufferCacheEntry* foundEntry = cache.lookup(12345);
+    if (foundEntry) {
+        std::cout << "Found buffer: " << foundEntry->metadata << std::endl;
+    }
+
+    // Invalidate a specific entry
+    bool result = cache.invalidate(12345);
+    std::cout << "Invalidate result: " << (result ? "Success" : "Failure") << std::endl;
+
+    return 0;
+}
+```
+
+## BufferCache
+
+### Overview
+
+**BufferCache** is a class designed to manage a cache of buffer handles and their metadata using an LRU (Least Recently Used) strategy. This design ensures efficient access to frequently used buffers while also allowing for the eviction of less frequently accessed ones when memory constraints are reached.
+
+### Class Diagram
+
+```mermaid
+classDiagram
+    class BufferCache {
+        +BufferCache(size_t maxEntries = 64)
+        -~BufferCache()
+        +const BufferCacheEntry* lookup(uint64_t bufferId) const
+        +void insert(const BufferCacheEntry& entry)
+        +bool invalidate(uint64_t bufferId)
+        +void clear()
+        +size_t size() const
+        +double getHitRate() const
+        +void resize(size_t newMaxEntries)
+
+        -size_t maxEntries_
+        -std::list<BufferCacheEntry> entries_
+        -std::unordered_map<uint64_t, std::list<BufferCacheEntry>::iterator> indexMap_
+        -mutable std::mutex mutex_
+        -mutable uint6

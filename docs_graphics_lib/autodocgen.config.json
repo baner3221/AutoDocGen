@@ -58,8 +58,8 @@
     ]
   },
   "chunker": {
-    "max_chunk_lines": 300,
-    "min_chunk_lines": 30,
+    "max_chunk_lines": 75,
+    "min_chunk_lines": 15,
     "context_lines": 10,
     "overlap_lines": 5
   },

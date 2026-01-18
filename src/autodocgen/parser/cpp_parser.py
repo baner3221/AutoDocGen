@@ -163,6 +163,11 @@ class CppParser:
         # Walk the AST
         self._process_cursor(tu.cursor, analysis, file_path)
 
+        # Fallback: If libclang found 0 functions/classes but we have source code,
+        # use regex-based extraction to ensure the chunker has function boundaries
+        if not analysis.functions and not analysis.classes and parse_errors:
+            self._fallback_regex_parse(analysis, self._source_code)
+
         return analysis
 
     def _process_cursor(
@@ -568,3 +573,151 @@ class CppParser:
             ):
                 params.append(child.spelling)
         return params
+
+    def _fallback_regex_parse(self, analysis: CppFileAnalysis, source_code: str) -> None:
+        """
+        Fallback parser using regex when libclang fails to extract functions.
+        This ensures the chunker has function boundaries even when headers are missing.
+        """
+        import re
+        
+        lines = source_code.splitlines()
+        
+        # Keywords that are NOT function names
+        control_flow = {'if', 'for', 'while', 'switch', 'catch', 'return', 'else', 'do'}
+        
+        # Pattern for C++ function/method definitions:
+        # ReturnType [ClassName::]FunctionName(params) [const] [noexcept] {
+        # Requires a class qualifier for method definitions in .cpp files
+        func_pattern = re.compile(
+            r'^\s*'
+            r'(?:(?:static|inline|virtual|explicit|constexpr)\s+)*'  # Optional specifiers
+            r'([\w:*&<>\s]+?)\s+'  # Return type (group 1) - must exist
+            r'([\w]+)::'  # Class name (group 2) - REQUIRED for method defs
+            r'(~?[\w]+)\s*'  # Function name (group 3)
+            r'\(([^)]*)\)\s*'  # Parameters (group 4)
+            r'(?:const)?\s*(?:noexcept)?\s*(?:override)?\s*(?:final)?\s*'
+            r'(?:\{|\:)',  # Opening brace or initializer list
+            re.MULTILINE
+        )
+        
+        # Also match constructor pattern (no return type)
+        ctor_pattern = re.compile(
+            r'^\s*'
+            r'([\w]+)::'  # Class name (group 1)
+            r'(~?[\w]+)\s*'  # Ctor/Dtor name (group 2)
+            r'\(([^)]*)\)\s*'  # Parameters (group 3)
+            r'(?:\{|\:)',  # Opening brace or initializer list
+            re.MULTILINE
+        )
+        
+        # Pre-process: Join multi-line function signatures
+        # Look for lines ending with open paren that don't have close paren
+        joined_lines = []
+        i = 0
+        line_mapping = []  # Maps joined line index to original line numbers
+        
+        while i < len(lines):
+            line = lines[i]
+            original_start = i
+            
+            # Check if this line has an unbalanced open paren (potential multi-line sig)
+            if '(' in line and ')' not in line and '::' in line:
+                # Join lines until we find the closing paren and opening brace
+                combined = line
+                j = i + 1
+                while j < len(lines) and '{' not in combined and ':' not in combined.split(')')[-1] if ')' in combined else True:
+                    combined += ' ' + lines[j].strip()
+                    j += 1
+                    if ')' in combined and ('{' in combined or '):' in combined or ') :' in combined):
+                        break
+                joined_lines.append(combined)
+                line_mapping.append((original_start, j))
+                i = j
+            else:
+                joined_lines.append(line)
+                line_mapping.append((original_start, original_start + 1))
+                i += 1
+        
+        for i, line in enumerate(joined_lines):
+            orig_start, orig_end = line_mapping[i]
+            
+            # Try regular function pattern first
+            match = func_pattern.match(line)
+            if match:
+                return_type = match.group(1).strip() if match.group(1) else ""
+                class_name = match.group(2) or ""
+                func_name = match.group(3)
+                qualified = f"{class_name}::{func_name}"
+                
+                # Find function end (matching brace)
+                start_line = orig_start + 1
+                end_line = self._find_function_end(lines, orig_start)
+                
+                # Extract body code
+                body = "\n".join(lines[orig_start:end_line])
+                
+                analysis.functions.append(FunctionInfo(
+                    name=func_name,
+                    qualified_name=qualified,
+                    return_type=return_type,
+                    return_type_spelling=return_type,
+                    parameters=[],
+                    namespace="",
+                    location=SourceLocation(
+                        file_path=analysis.file_path,
+                        line_start=start_line,
+                        line_end=end_line,
+                    ),
+                    body_code=body,
+                ))
+                continue
+            
+            # Try constructor/destructor pattern
+            ctor_match = ctor_pattern.match(line)
+            if ctor_match:
+                class_name = ctor_match.group(1)
+                func_name = ctor_match.group(2)
+                
+                # Only match if class name matches function name (or ~class for dtor)
+                if func_name == class_name or func_name == f"~{class_name}":
+                    qualified = f"{class_name}::{func_name}"
+                    
+                    start_line = orig_start + 1
+                    end_line = self._find_function_end(lines, orig_start)
+                    body = "\n".join(lines[orig_start:end_line])
+                    
+                    analysis.functions.append(FunctionInfo(
+                        name=func_name,
+                        qualified_name=qualified,
+                        return_type="",  # Constructors have no return type
+                        return_type_spelling="",
+                        parameters=[],
+                        namespace="",
+                        location=SourceLocation(
+                            file_path=analysis.file_path,
+                            line_start=start_line,
+                            line_end=end_line,
+                        ),
+                        body_code=body,
+                    ))
+
+    def _find_function_end(self, lines: list[str], start_idx: int) -> int:
+        """Find the ending line of a function by matching braces."""
+        brace_count = 0
+        started = False
+        
+        for i in range(start_idx, len(lines)):
+            line = lines[i]
+            for char in line:
+                if char == '{':
+                    brace_count += 1
+                    started = True
+                elif char == '}':
+                    brace_count -= 1
+            
+            if started and brace_count == 0:
+                return i + 1  # Return 1-indexed end line
+        
+        # If no matching brace found, return a reasonable default
+        return min(start_idx + 50, len(lines))

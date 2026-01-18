@@ -8,7 +8,7 @@
 | **Lines** | 136 |
 | **Classes** | 4 |
 | **Functions** | 2 |
-| **Last Updated** | 2026-01-18 13:28 |
+| **Last Updated** | 2026-01-18 20:07 |
 
 ---
 
@@ -29,127 +29,235 @@
 ## Documentation for `BufferTypes.h`
 
 ### 1. Comprehensive Description (2-4 paragraphs)
-The `BufferTypes.h` header file defines fundamental type definitions and structures used throughout the Android Graphics Buffer Management System. These definitions are crucial for managing graphics buffers efficiently, ensuring compatibility with various hardware and software components.
-
-The buffer management system is essential for applications that require high-performance image processing and rendering. It allows developers to allocate and manage memory for graphics buffers, specifying their dimensions, formats, and usage flags. This header file provides a comprehensive set of types and structures to facilitate this process, making it easier to integrate graphics capabilities into Android applications.
+The `BufferTypes.h` file defines enumerations and flags used to manage pixel formats and buffer usage in the Android graphics buffer library. The `PixelFormat` enumeration maps Android HAL pixel formats to a more readable format, facilitating compatibility with camera and display subsystems. The `BufferUsage` enum provides flags that can be combined using bitwise OR to specify how buffers are intended to be used, such as CPU read/write operations or GPU rendering targets.
 
 ### 2. Parameters (DETAILED for each)
 #### PixelFormat
-- **Purpose**: Defines the pixel format for buffer allocation.
-- **Type Semantics**: An enumeration that maps Android HAL pixel formats to their corresponding values.
-- **Valid Values**: A set of predefined pixel formats, including common formats like RGBA_8888, RGBX_8888, and YV12.
-- **Ownership**: The enum is defined within the `PixelFormat` namespace, so it does not require ownership management.
+- **Purpose**: Defines the pixel format of a buffer.
+- **Type Semantics**: An enumeration type that represents different pixel formats.
+- **Valid Values**: A set of predefined values representing various Android HAL pixel formats, such as RGBA_8888, RGBX_8888, and YV12.
+- **Ownership**: The enum values are static constants and do not own any memory.
 - **Nullability**: Not applicable; the enum values are fixed.
 
 #### BufferUsage
-- **Purpose**: Defines usage flags for buffer allocation. These flags specify how a buffer will be used (e.g., CPU read/write, GPU texture/render target).
-- **Type Semantics**: An enumeration that combines multiple flags using bitwise OR operations.
-- **Valid Values**: A set of predefined usage flags, including CPU_READ_RARELY, CPU_WRITE_OFTEN, and GPU_TEXTURE.
-- **Ownership**: The enum is defined within the `BufferUsage` namespace, so it does not require ownership management.
+- **Purpose**: Defines flags that specify how a buffer is intended to be used.
+- **Type Semantics**: An enumeration type that represents different usage patterns for buffers.
+- **Valid Values**: A set of predefined bit flags representing various usage patterns, such as CPU_READ_RARELY and GPU_TEXTURE.
+- **Ownership**: The enum values are static constants and do not own any memory.
 - **Nullability**: Not applicable; the enum values are fixed.
-
-#### AllocationStatus
-- **Purpose**: Defines status codes for buffer allocation operations. These codes indicate whether a buffer was successfully allocated or if an error occurred.
-- **Type Semantics**: An enumeration that maps error codes to their corresponding integer values.
-- **Valid Values**: A set of predefined error codes, including SUCCESS, ERROR_NO_MEMORY, and ERROR_INVALID_DIMENSIONS.
-- **Ownership**: The enum is defined within the `AllocationStatus` namespace, so it does not require ownership management.
-- **Nullability**: Not applicable; the enum values are fixed.
-
-#### BufferDescriptor
-- **Purpose**: Describes the geometry and format of a buffer. This structure is used to specify the dimensions, stride, pixel format, usage flags, and layer count of a buffer.
-- **Type Semantics**: A struct that contains various properties of a buffer.
-- **Valid Values**: The `width`, `height`, `stride`, `format`, `usage`, and `layerCount` fields can be set to any valid integer values. The `format` field should match one of the predefined pixel formats, and the `usage` field should combine multiple usage flags using bitwise OR operations.
-- **Ownership**: The struct is defined within the `BufferDescriptor` namespace, so it does not require ownership management.
-- **Nullability**: Not applicable; all fields are required.
-
-#### NativeHandle
-- **Purpose**: Wraps a native handle for gralloc buffers. This structure is used to manage the file descriptor and other properties of a buffer.
-- **Type Semantics**: A struct that contains various properties of a buffer's native handle.
-- **Valid Values**: The `fd` field should be a valid file descriptor, and the `numFds`, `numInts`, and `data` fields can be set to any integer values. The `data` array is used for additional information about the buffer.
-- **Ownership**: The struct is defined within the `NativeHandle` namespace, so it does not require ownership management.
-- **Nullability**: Not applicable; all fields are required.
-
-#### MappedRegion
-- **Purpose**: Represents a memory region for CPU-side buffer access. This structure is used to map a buffer into memory and provide access to its data.
-- **Type Semantics**: A struct that contains various properties of a mapped buffer region.
-- **Valid Values**: The `data` field should be a valid pointer, the `size` field should be a non-negative integer value, and the `lockMode` field can be set to any valid lock mode (e.g., 0 for read-only).
-- **Ownership**: The struct is defined within the `MappedRegion` namespace, so it does not require ownership management.
-- **Nullability**: Not applicable; all fields are required.
-
-#### PoolStatistics
-- **Purpose**: Provides statistics for buffer pool monitoring. This structure is used to track various metrics related to a buffer pool.
-- **Type Semantics**: A struct that contains various statistics about the buffer pool.
-- **Valid Values**: The `totalBuffers`, `freeBuffers`, `allocatedBytes`, `peakAllocatedBytes`, `allocationCount`, and `reuseCount` fields can be set to any non-negative integer values. The `hitRate` field should be a floating-point value between 0.0 and 1.0.
-- **Ownership**: The struct is defined within the `PoolStatistics` namespace, so it does not require ownership management.
-- **Nullability**: Not applicable; all fields are required.
 
 ### 3. Return Value
-- **Purpose**: Returns the calculated size of a buffer based on its width, height, stride, and format.
-- **Type Semantics**: A size_t value representing the total size of the buffer in bytes.
-- **Valid Values**: The returned size is determined by multiplying the `width`, `height`, `stride`, and format-specific byte count.
-- **Ownership**: Not applicable; the return value is a simple integer.
-- **Nullability**: Not applicable.
+The function does not return a value.
 
 ### 4. Dependencies Cross-Reference
-This header file does not depend on any external classes or functions.
+No external classes or functions are used in this file.
 
 ### 5. Side Effects
-- State modifications: The `BufferDescriptor` struct modifies its fields based on user input, and the `NativeHandle` struct modifies its fields based on the native buffer's properties.
-- Locks acquired/released: None.
-- I/O operations: None.
-- Signals/events emitted: None.
+- No state modifications are made.
+- No locks are acquired or released.
+- No I/O operations are performed.
+- No signals/events are emitted.
 
 ### 6. Usage Context
-This header file is used by various components of the Android Graphics Buffer Management System, including the graphics buffer allocator and pool management modules. It provides a common interface for managing buffers across different parts of the system.
+This file is typically included by other parts of the graphics buffer library to define pixel formats and buffer usage flags for buffer allocation and management.
 
 ### 7. Related Functions
 | Relationship Type | Function Name | Description |
-| --- | --- | --- |
-| Member Function | `BufferDescriptor::calculateSize()` | Calculates the size of a buffer based on its dimensions and format. |
-| Member Function | `BufferDescriptor::isValid()` | Checks if the buffer descriptor is valid. |
-| Member Function | `BufferDescriptor::toString()` | Converts the buffer descriptor to a string representation for debugging purposes. |
-| Member Function | `NativeHandle::isValid()` | Checks if the native handle is valid. |
-| Member Function | `NativeHandle::close()` | Closes the file descriptor associated with the native handle. |
-| Member Function | `MappedRegion::isLocked()` | Checks if the mapped region is locked. |
+|-------------------|--------------|-------------|
+| Enumerations      | PixelFormat   | Defines pixel formats. |
+| Enumerations      | BufferUsage    | Defines buffer usage flags. |
 
 ### 8. Code Example
+
 ```cpp
-#include <buffer_types.h>
+// Example of using the BufferTypes.h file to define a buffer with specific pixel format and usage flags.
+#include "BufferTypes.h"
 
 int main() {
-    // Create a buffer descriptor for an RGBA_8888 buffer with dimensions 1024x768 and usage flags GPU_TEXTURE and CPU_READ_RARELY
-    android::graphics::BufferDescriptor desc;
-    desc.width = 1024;
-    desc.height = 768;
-    desc.format = android::graphics::PixelFormat::RGBA_8888;
-    desc.usage = android::graphics::BufferUsage::GPU_TEXTURE | android::graphics::BufferUsage::CPU_READ_RARELY;
+    // Define a buffer with RGBA_8888 pixel format and GPU_TEXTURE and CPU_READ_OFTEN usage flags.
+    android::graphics::PixelFormat pixelFormat = android::graphics::PixelFormat::RGBA_8888;
+    android::graphics::BufferUsage bufferUsage = android::graphics::BufferUsage::GPU_TEXTURE | android::graphics::BufferUsage::CPU_READ_OFTEN;
 
-    // Calculate the size of the buffer
-    size_t bufferSize = desc.calculateSize();
-
-    // Allocate a native handle for the buffer
-    android::graphics::NativeHandle handle;
-    handle.fd = open("/dev/graphics/fb0", O_RDWR);
-    if (handle.fd < 0) {
-        // Handle error
-    }
-
-    // Map the buffer into memory
-    android::graphics::MappedRegion region;
-    region.data = mmap(nullptr, bufferSize, PROT_READ | PROT_WRITE, MAP_SHARED, handle.fd, 0);
-    if (region.data == MAP_FAILED) {
-        // Handle error
-    }
-    region.size = bufferSize;
-
-    // Use the mapped buffer for rendering or processing
-
-    // Unmap and close the buffer
-    munmap(region.data, bufferSize);
-    close(handle.fd);
+    // Use the defined pixel format and usage flags to allocate a buffer.
+    // Buffer allocation logic would be implemented here.
 
     return 0;
 }
 ```
 
-This code example demonstrates how to create a buffer descriptor, calculate its size, allocate a native handle, map the buffer into memory, use it for rendering, and then unmap and close it.
+This example demonstrates how to use the `PixelFormat` and `BufferUsage` enums to define a buffer with specific properties, which can then be used for further processing or rendering operations.
+
+## Documentation for `BufferDescriptor`
+
+### Comprehensive Description (2-4 paragraphs)
+The `BufferDescriptor` struct in the `android::graphics` namespace is designed to encapsulate metadata about a graphics buffer, such as its dimensions, format, and usage flags. This structure is crucial for managing and allocating buffers efficiently within the Android system, ensuring that they are correctly configured for various rendering tasks.
+
+### Parameters (DETAILED for each)
+- **width**: 
+  - **Purpose**: Specifies the width of the buffer in pixels.
+  - **Type Semantics**: An unsigned integer representing the number of pixels along the horizontal axis.
+  - **Valid Values**: Any non-negative integer.
+  - **Ownership**: The value is owned by the `BufferDescriptor` instance.
+  - **Nullability**: Not applicable.
+
+- **height**: 
+  - **Purpose**: Specifies the height of the buffer in pixels.
+  - **Type Semantics**: An unsigned integer representing the number of pixels along the vertical axis.
+  - **Valid Values**: Any non-negative integer.
+  - **Ownership**: The value is owned by the `BufferDescriptor` instance.
+  - **Nullability**: Not applicable.
+
+- **stride**: 
+  - **Purpose**: Defines the byte offset between consecutive rows in the buffer. This is particularly useful for buffers with a non-standard pixel format or when multiple layers are involved.
+  - **Type Semantics**: An unsigned integer representing the number of bytes between the start of one row and the next.
+  - **Valid Values**: Any positive integer, typically equal to `width * bytesPerPixel`, where `bytesPerPixel` is determined by the buffer's format.
+  - **Ownership**: The value is owned by the `BufferDescriptor` instance.
+  - **Nullability**: Not applicable.
+
+- **format**: 
+  - **Purpose**: Specifies the pixel format of the buffer, which determines how pixels are stored and interpreted.
+  - **Type Semantics**: An enumeration (`PixelFormat`) representing the format type.
+  - **Valid Values**: A set of predefined values such as `UNKNOWN`, `RGBA_8888`, `RGB_565`, etc. Each value corresponds to a specific color depth and layout.
+  - **Ownership**: The value is owned by the `BufferDescriptor` instance.
+  - **Nullability**: Not applicable.
+
+- **usage**: 
+  - **Purpose**: Indicates how the buffer will be used, such as for rendering or video processing.
+  - **Type Semantics**: An enumeration (`BufferUsage`) representing the usage flags.
+  - **Valid Values**: A set of predefined values such as `NONE`, `RENDERABLE`, `VIDEO_PROCESSOR`, etc. Each value indicates specific capabilities and intended use cases.
+  - **Ownership**: The value is owned by the `BufferDescriptor` instance.
+  - **Nullability**: Not applicable.
+
+- **layerCount**: 
+  - **Purpose**: Specifies the number of layers in a buffer, which is useful for multi-layered graphics operations.
+  - **Type Semantics**: An unsigned integer representing the number of layers.
+  - **Valid Values**: Any positive integer, typically 1 or more.
+  - **Ownership**: The value is owned by the `BufferDescriptor` instance.
+  - **Nullability**: Not applicable.
+
+### Return Value
+- **Purpose**: Returns a size_t representing the total size of the buffer in bytes based on its dimensions and format.
+- **All Possible Return States**: A valid non-negative integer representing the buffer size.
+- **Error Conditions and How They're Indicated**: No error conditions are expected, as the calculation is straightforward.
+- **Ownership of Returned Objects**: The return value is a simple integer and does not transfer ownership.
+
+### Dependencies Cross-Reference
+- `PixelFormat`: Used to determine the byte per pixel for calculating buffer size.
+- `BufferUsage`: Used to validate usage flags during buffer allocation.
+
+### Side Effects
+- State modifications: Updates the internal state of the `BufferDescriptor` instance with new values.
+- Locks acquired/released: No locks are involved in this operation.
+- I/O operations: No I/O operations are performed.
+- Signals/events emitted: No signals or events are emitted.
+
+### Usage Context
+This struct is typically used during buffer allocation and configuration within the Android graphics subsystem. It provides a standardized way to describe buffer requirements, which helps in managing resources efficiently and ensuring compatibility across different rendering pipelines.
+
+### Related Functions
+| Relationship Type | Function Name | Description |
+|------------------|--------------|-------------|
+| Member           | calculateSize() | Calculates the total size of the buffer based on its dimensions and format. |
+| Member           | isValid() const | Checks if the buffer descriptor is valid by ensuring all fields have non-negative values. |
+| Member           | toString() const | Converts the buffer descriptor to a string representation for debugging purposes. |
+
+### Code Example
+```cpp
+BufferDescriptor desc;
+desc.width = 1920;
+desc.height = 1080;
+desc.format = PixelFormat::RGBA_8888;
+desc.usage = BufferUsage::RENDERABLE;
+
+size_t bufferSize = desc.calculateSize();
+if (bufferSize > 0) {
+    // Allocate buffer memory using the calculated size
+} else {
+    ALOGE("Invalid buffer descriptor");
+}
+```
+
+## Documentation for `NativeHandle`
+
+### Comprehensive Description (2-4 paragraphs)
+The `NativeHandle` struct in the `android::graphics` namespace is a wrapper around native graphics handles, such as file descriptors or shared memory objects. This structure is used to manage and access native resources efficiently within the Android system.
+
+### Parameters (DETAILED for each)
+- **fd**: 
+  - **Purpose**: Represents the file descriptor of the native resource.
+  - **Type Semantics**: An integer representing a file descriptor.
+  - **Valid Values**: A valid file descriptor number, typically non-negative.
+  - **Ownership**: The value is owned by the `NativeHandle` instance.
+  - **Nullability**: Can be null (e.g., when the handle is not yet initialized).
+
+- **numFds**: 
+  - **Purpose**: Specifies the number of additional file descriptors associated with the native resource.
+  - **Type Semantics**: An integer representing the count of additional file descriptors.
+  - **Valid Values**: Any non-negative integer, typically 0 or more.
+  - **Ownership**: The value is owned by the `NativeHandle` instance.
+  - **Nullability**: Can be null (e.g., when no additional file descriptors are used).
+
+- **numInts**: 
+  - **Purpose**: Specifies the number of integer values associated with the native resource.
+  - **Type Semantics**: An integer representing the count of integer values.
+  - **Valid Values**: Any non-negative integer, typically 0 or more.
+  - **Ownership**: The value is owned by the `NativeHandle` instance.
+  - **Nullability**: Can be null (e.g., when no additional integer values are used).
+
+- **data**: 
+  - **Purpose**: An array of integers to store additional data associated with the native resource.
+  - **Type Semantics**: An array of integers.
+  - **Valid Values**: A set of integer values, typically used for passing additional metadata or configuration parameters.
+  - **Ownership**: The array is owned by the `NativeHandle` instance.
+  - **Nullability**: Can be null (e.g., when no additional data is needed).
+
+### Return Value
+- **Purpose**: Returns a boolean indicating whether the native handle is valid, i.e., if the file descriptor is non-negative.
+- **All Possible Return States**: A boolean value (`true` or `false`).
+- **Error Conditions and How They're Indicated**: No error conditions are expected, as the validity check is straightforward.
+- **Ownership of Returned Objects**: The return value is a simple boolean and does not transfer ownership.
+
+### Dependencies Cross-Reference
+No external classes/functions are used in this context.
+
+### Side Effects
+- State modifications: Updates the internal state of the `NativeHandle` instance with new values.
+- Locks acquired/released: No locks are involved in this operation.
+- I/O operations: No I/O operations are performed.
+- Signals/events emitted: No signals or events are emitted.
+
+### Usage Context
+This struct is typically used during buffer allocation and configuration within the Android graphics subsystem. It provides a standardized way to manage native resources, which helps in ensuring efficient resource management and compatibility across different rendering pipelines.
+
+### Related Functions
+No related functions are defined for this struct.
+
+### Code Example
+```cpp
+NativeHandle handle;
+handle.fd = open("/dev/graphics/fb0", O_RDWR);
+if (handle.fd >= 0) {
+    // Use the native handle for buffer operations
+} else {
+    ALOGE("Failed to open framebuffer device");
+}
+```
+
+## Documentation for `MappedRegion`
+
+### Comprehensive Description (2-4 paragraphs)
+The `MappedRegion` struct in the `android::graphics` namespace is used to represent a memory region that has been mapped into the process's address space. This structure is crucial for accessing buffer data directly on the CPU.
+
+### Parameters (DETAILED for each)
+- **data**: 
+  - **Purpose**: Points to the start of the mapped memory region.
+  - **Type Semantics**: A pointer to a block of memory.
+  - **Valid Values**: A valid memory address, typically obtained from a buffer mapping operation.
+  - **Ownership**: The pointer is owned by the `MappedRegion` instance.
+  - **Nullability**: Can be null (e.g., when the region is not yet mapped).
+
+- **size**: 
+  - **Purpose**: Specifies the size of the mapped memory region in bytes.
+  - **Type Semantics**: A size_t representing the number of bytes.
+  - **Valid Values**: Any non-negative integer, typically equal to the buffer's size.
+  - **Ownership**: The value is owned by the

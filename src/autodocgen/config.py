@@ -220,11 +220,11 @@ class ChunkerConfig(BaseModel):
     """Chunking configuration for large files."""
 
     max_chunk_lines: int = Field(
-        default=300,
+        default=75,
         description="Maximum lines per chunk (reduced for smaller context windows)"
     )
     min_chunk_lines: int = Field(
-        default=30,
+        default=15,
         description="Minimum lines per chunk (to avoid tiny chunks)"
     )
     context_lines: int = Field(
