@@ -1,0 +1,74 @@
+{
+  "codebase_path": "tests\\sample_code",
+  "output_path": "docs_test_graph",
+  "cache_path": "cache",
+  "database_path": "data\\autodocgen.db",
+  "llm": {
+    "backend": "ollama",
+    "ollama_host": "127.0.0.1",
+    "ollama_port": 11434,
+    "llamacpp_host": "127.0.0.1",
+    "llamacpp_port": 8081,
+    "model_name": "qwen2.5-coder:7b",
+    "model_path": null,
+    "low_resource_mode": true,
+    "context_length": 8192,
+    "temperature": 0.1,
+    "max_tokens": 2048,
+    "gpu_layers": 0
+  },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8080,
+    "allow_network_access": false,
+    "debug": false
+  },
+  "privacy": {
+    "allow_any_network": false,
+    "block_outbound": true,
+    "enable_telemetry": false,
+    "enable_analytics": false,
+    "enable_crash_reports": false,
+    "log_llm_prompts": false,
+    "cache_llm_responses": true,
+    "clear_cache_on_exit": false
+  },
+  "parser": {
+    "supported_extensions": [
+      ".cpp",
+      ".cc",
+      ".cxx",
+      ".c",
+      ".h",
+      ".hpp",
+      ".hxx",
+      ".inl"
+    ],
+    "include_paths": [],
+    "compile_flags": [
+      "-std=c++17",
+      "-DANDROID"
+    ],
+    "exclude_patterns": [
+      "**/test/**",
+      "**/tests/**",
+      "**/third_party/**",
+      "**/external/**"
+    ]
+  },
+  "chunker": {
+    "max_chunk_lines": 300,
+    "min_chunk_lines": 30,
+    "context_lines": 10,
+    "overlap_lines": 5
+  },
+  "documentation": {
+    "output_format": "markdown",
+    "generate_diagrams": true,
+    "diagram_format": "svg",
+    "include_source_links": true,
+    "include_examples": true
+  },
+  "parallel_workers": 1,
+  "batch_size": 1
+}
