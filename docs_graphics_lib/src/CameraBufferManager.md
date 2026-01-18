@@ -8,6 +8,47 @@
 | **Lines** | 325 |
 | **Classes** | 0 |
 | **Functions** | 22 |
+| **Last Updated** | 2026-01-18 21:17 |
+
+---
+
+## Quick Navigation
+
+### Functions
+- [StreamConfiguration::toString](#streamconfiguration-tostring)
+- [CameraBufferManager::CameraBufferManager](#camerabuffermanager-camerabuffermanager)
+- [CameraBufferManager::CameraBufferManager](#camerabuffermanager-camerabuffermanager)
+- [CameraBufferManager::~CameraBufferManager](#camerabuffermanager-~camerabuffermanager)
+- [CameraBufferManager::configureStream](#camerabuffermanager-configurestream)
+- [CameraBufferManager::reconfigureStream](#camerabuffermanager-reconfigurestream)
+- [CameraBufferManager::dequeueBuffer](#camerabuffermanager-dequeuebuffer)
+- [CameraBufferManager::queueBuffer](#camerabuffermanager-queuebuffer)
+- [CameraBufferManager::acquireBuffer](#camerabuffermanager-acquirebuffer)
+- [CameraBufferManager::releaseBuffer](#camerabuffermanager-releasebuffer)
+- [CameraBufferManager::setBufferCallback](#camerabuffermanager-setbuffercallback)
+- [CameraBufferManager::setErrorCallback](#camerabuffermanager-seterrorcallback)
+- [CameraBufferManager::getStreamState](#camerabuffermanager-getstreamstate)
+- [CameraBufferManager::getConfiguredStreams](#camerabuffermanager-getconfiguredstreams)
+- [CameraBufferManager::getStreamStatistics](#camerabuffermanager-getstreamstatistics)
+- [CameraBufferManager::flushAllStreams](#camerabuffermanager-flushallstreams)
+- [CameraBufferManager::dumpState](#camerabuffermanager-dumpstate)
+- [CameraBufferManager::onBufferAcquired](#camerabuffermanager-onbufferacquired)
+- [CameraBufferManager::onBufferReleased](#camerabuffermanager-onbufferreleased)
+- [CameraBufferManager::onPoolExhausted](#camerabuffermanager-onpoolexhausted)
+- *... and 2 more*
+
+---
+
+# CameraBufferManager.cpp
+
+---
+
+| Property | Value |
+|----------|-------|
+| **Location** | `src\CameraBufferManager.cpp` |
+| **Lines** | 325 |
+| **Classes** | 0 |
+| **Functions** | 22 |
 | **Last Updated** | 2026-01-18 20:50 |
 
 ---
@@ -1051,4 +1092,252 @@ int main() {
 
 This code example demonstrates how to initialize a `CameraBufferManager`, retrieve a stream configuration by its ID, and use the retrieved information for further processing. It also shows how to shut down the camera buffer manager after use.
 
-<!-- validation_failed: missing [~CameraBufferManager, onBufferAcquired, onBufferReleased, onPoolExhausted] -->
+## CameraBufferManager::~CameraBufferManager
+
+### Destructor
+
+The destructor for the `CameraBufferManager` class is responsible for cleaning up all resources associated with the camera buffers and ensuring that no operations are performed on the manager after it has been destroyed.
+
+#### Purpose
+
+- **Resource Cleanup**: Ensures that all allocated camera buffers are released, preventing memory leaks.
+- **Thread Safety**: Uses a `std::lock_guard` to ensure thread safety when clearing the streams map.
+- **Lifecycle Management**: Marks the object as no longer valid for further operations after destruction.
+
+#### Parameters
+
+- None
+
+#### Dependencies
+
+- `streams_`: A `std::map` that stores stream configurations and their corresponding buffer managers. This is a member variable of the class.
+- `streamsMutex_`: A `std::mutex` used to protect access to the `streams_` map during concurrent operations.
+
+#### Side Effects
+
+- **Memory**: Releases all camera buffers associated with the streams managed by this manager.
+- **State**: Marks the object as invalid, preventing further use of its methods.
+
+#### Thread Safety
+
+- The destructor is thread-safe due to the use of a `std::lock_guard` to acquire the `streamsMutex_`. This ensures that no other operations can modify the `streams_` map while it is being cleared.
+
+#### Lifecycle
+
+- **Initialization**: The object is created and initialized with a set of stream configurations.
+- **Usage**: Operations such as configuring, reconfiguring, dequeuing, queuing, and acquiring buffers are performed on this manager.
+- **Destruction**: After all operations have been completed, the destructor is called to clean up resources.
+
+#### Usage Example
+
+```cpp
+CameraBufferManager bufferManager;
+// Configure streams...
+bufferManager.configureStream(...);
+// Use bufferManager...
+
+// Destroying the buffer manager releases all resources
+bufferManager.~CameraBufferManager();
+```
+
+#### Mermaid Diagram
+
+```mermaid
+sequenceDiagram
+    participant CameraBufferManager
+    participant StreamsMap
+    participant Mutex
+
+    CameraBufferManager->>StreamsMap: clear()
+    CameraBufferManager->>Mutex: lock()
+    Mutex-->>StreamsMap: acquire()
+    StreamsMap-->>CameraBufferManager: cleared
+    Mutex-->>CameraBufferManager: unlock()
+```
+
+This diagram illustrates the sequence of events that occur when the destructor is called, including acquiring and releasing the mutex to ensure thread safety during the cleanup process.
+
+## CameraBufferManager::onBufferAcquired
+
+### Description
+The `onBufferAcquired` function is a crucial method within the `CameraBufferManager` class, responsible for handling the acquisition of buffers from a buffer pool. This method is called by the system when a buffer has been successfully acquired and is ready to be used in camera operations.
+
+### Parameters
+- **pool**: A pointer to the `BufferPool` object that manages the buffer pool from which the buffer was acquired.
+  - **Type**: `BufferPool*`
+  - **Ownership**: The caller retains ownership of this pointer. It is expected that the `BufferPool` will manage the lifecycle of the buffer and release it when no longer needed.
+
+- **buffer**: A pointer to the `GraphicBuffer` object that has been acquired from the buffer pool.
+  - **Type**: `GraphicBuffer*`
+  - **Ownership**: The caller retains ownership of this pointer. It is expected that the `CameraBufferManager` will manage the lifecycle of the buffer and release it when no longer needed.
+
+### Dependencies
+- **BufferPool**: This function relies on the `BufferPool` class to manage the acquisition and release of buffers.
+  - **Link**: [BufferPool Class Documentation](https://android.googlesource.com/platform/system/media/+/master/camera/include/camera2/CameraBufferManager.h#103)
+
+- **GraphicBuffer**: This function relies on the `GraphicBuffer` class to represent the acquired buffer.
+  - **Link**: [GraphicBuffer Class Documentation](https://android.googlesource.com/platform/system/core/include/android/hardware/graphics_buffer.h#45)
+
+### Side Effects
+- The `onBufferAcquired` function updates the stream state to indicate that the camera is now in a streaming mode. This typically involves setting a flag or modifying internal state variables to reflect that buffers are being actively processed.
+
+### Thread Safety
+- The `onBufferAcquired` function is designed to be thread-safe, meaning it can be called concurrently from multiple threads without causing data corruption or race conditions.
+  - **Note**: However, the specific implementation details of thread safety would depend on how the `CameraBufferManager` class is structured and managed.
+
+### Lifecycle
+- The lifecycle of the `onBufferAcquired` function involves:
+  1. Receiving a buffer from the buffer pool.
+  2. Updating the stream state to indicate that buffers are being processed.
+  3. Returning control back to the system or camera framework for further processing.
+
+### Usage Examples
+```cpp
+// Example usage of CameraBufferManager::onBufferAcquired
+void MyCameraCallback::onBufferAcquired(BufferPool* pool, GraphicBuffer* buffer) {
+    // Update stream state to indicate that buffers are being processed
+    mCameraBufferManager->onBufferAcquired(pool, buffer);
+    
+    // Further processing or handling of the acquired buffer
+    processBuffer(buffer);
+}
+```
+
+### Mermaid Diagram
+
+```mermaid
+sequenceDiagram
+    participant CameraBufferManager
+    participant BufferPool
+    participant GraphicBuffer
+    
+    CameraBufferManager->>BufferPool: acquireBuffer()
+    BufferPool-->>CameraBufferManager: GraphicBuffer*
+    
+    CameraBufferManager->>GraphicBuffer: process()
+    
+    CameraBufferManager->>CameraBufferManager: onBufferAcquired(BufferPool*, GraphicBuffer*)
+```
+
+This diagram illustrates the sequence of events when a buffer is acquired and processed by the `CameraBufferManager`.
+
+## CameraBufferManager::onBufferReleased
+
+### Description
+The `onBufferReleased` function is a callback method that is invoked when a buffer has been released back to the buffer pool. This function is part of the camera buffer management system and is responsible for handling the release of buffers in a way that updates statistics or performs any necessary cleanup.
+
+### Parameters
+- **pool**: A pointer to the `BufferPool` object that manages the buffer pool. The `BufferPool` class is defined in the `camera2` namespace and is used to allocate and manage camera buffers.
+  - **Type**: `BufferPool*`
+  - **Ownership**: The caller owns the `BufferPool` object and must ensure it remains valid until after this function returns.
+
+- **buffer**: A pointer to the `GraphicBuffer` object that has been released. The `GraphicBuffer` class is defined in the `android` namespace and represents a buffer of graphics data.
+  - **Type**: `GraphicBuffer*`
+  - **Ownership**: The caller owns the `GraphicBuffer` object and must ensure it remains valid until after this function returns.
+
+### Dependencies
+- This function depends on the `BufferPool` class to manage the buffer pool and the `GraphicBuffer` class to represent camera buffers.
+- It also relies on the Android system services such as SurfaceFlinger, AudioFlinger, etc., which are used for rendering and audio playback.
+
+### Side Effects
+- The `onBufferReleased` function updates statistics related to buffer usage. This includes tracking the number of times a buffer has been released and the total time spent in use.
+- It also performs any necessary cleanup operations on the released buffer, such as releasing resources or resetting internal state.
+
+### Thread Safety
+- The `onBufferReleased` function is thread-safe and can be called from multiple threads simultaneously. This ensures that the buffer management system remains responsive and efficient even when handling concurrent requests.
+
+### Lifecycle
+- The `onBufferReleased` function is typically called by the camera framework when a buffer has been released back to the buffer pool. It is part of the overall lifecycle of the camera buffer management system and is responsible for managing the release of buffers in a way that ensures optimal performance and resource utilization.
+
+### Usage Example
+```cpp
+// Example usage of CameraBufferManager::onBufferReleased
+void MyCameraCallback::onBufferReleased(BufferPool* pool, GraphicBuffer* buffer) {
+    // Update statistics
+    camera_buffer_manager->updateStatistics(buffer);
+
+    // Perform any necessary cleanup operations
+    camera_buffer_manager->cleanupBuffer(buffer);
+}
+```
+
+### Mermaid Diagram
+
+```mermaid
+sequenceDiagram
+    participant CameraBufferManager
+    participant BufferPool
+    participant GraphicBuffer
+
+    CameraBufferManager->>BufferPool: onBufferReleased(pool, buffer)
+    BufferPool-->>CameraBufferManager: Buffer released
+    CameraBufferManager->>GraphicBuffer: Cleanup buffer
+```
+
+This diagram illustrates the sequence of events when a buffer is released back to the buffer pool and how it is handled by the `CameraBufferManager` class.
+
+## CameraBufferManager::onPoolExhausted
+
+### Description
+The `onPoolExhausted` function is called when a buffer pool associated with the camera stream manager runs out of available buffers. This function identifies the stream ID that corresponds to the given buffer pool and notifies the error callback if one is set.
+
+### Parameters
+- **pool**: A pointer to the `BufferPool` object that has run out of buffers.
+  - **Type**: `BufferPool*`
+  - **Ownership**: The caller retains ownership of this pointer. It is expected that the buffer pool will be released after this function returns.
+
+### Dependencies
+- **StreamConfiguration**: This class contains information about each stream, including its associated buffer pool.
+- **RefBase**: Used for reference counting and lifecycle management of objects in Android native services.
+
+### Side Effects
+- The function acquires a lock on `streamsMutex_` to ensure thread safety when accessing the `streams_` map.
+- If an error callback is set (`errorCallback_`), it is called with the stream ID and an error status indicating that no memory is available.
+
+### Lifecycle
+- This function is part of the camera buffer manager's lifecycle, which manages the allocation and deallocation of buffers for camera streams.
+
+### Usage Example
+
+```cpp
+// Create a CameraBufferManager instance
+CameraBufferManager* manager = new CameraBufferManager();
+
+// Set an error callback
+manager->setErrorCallback([](int streamId, AllocationStatus status) {
+    // Handle the error, e.g., log it or notify the user
+    std::cerr << "Error: No memory available for stream ID " << streamId << std::endl;
+});
+
+// Configure a stream with a buffer pool
+StreamConfiguration config = ...; // Initialize your configuration
+manager->configureStream(config);
+
+// Simulate a situation where the buffer pool runs out of buffers
+BufferPool* pool = manager->getBufferPoolForStream(config.id);
+pool->dequeueBuffer(); // This will trigger onPoolExhausted
+```
+
+### Mermaid Diagram
+
+```mermaid
+sequenceDiagram
+    participant CameraBufferManager as CBM
+    participant StreamConfiguration as SC
+    participant BufferPool as BP
+    participant ErrorCallback as EC
+
+    Note left of CBM: When buffer pool runs out of buffers
+
+    CBM->>BP: onPoolExhausted(pool)
+    BP-->>CBM: pool is passed to CBM
+
+    alt Error callback set
+        CBM->>EC: errorCallback(streamId, AllocationStatus::ERROR_NO_MEMORY)
+        EC-->>CBM: Callback executed
+    else No error callback set
+        Note right of CBM: No action taken
+    end
+```
+
+This function ensures that the camera buffer manager can handle situations where a buffer pool runs out of buffers by notifying the appropriate parties and managing the stream configuration accordingly.

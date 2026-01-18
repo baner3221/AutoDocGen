@@ -8,6 +8,45 @@
 | **Lines** | 269 |
 | **Classes** | 0 |
 | **Functions** | 19 |
+| **Last Updated** | 2026-01-18 21:17 |
+
+---
+
+## Quick Navigation
+
+### Functions
+- [GrallocAllocator::~GrallocAllocator](#grallocallocator-~grallocallocator)
+- [GrallocAllocator::allocate](#grallocallocator-allocate)
+- [GrallocAllocator::allocateAsync](#grallocallocator-allocateasync)
+- [std::thread](#std-thread)
+- [GrallocAllocator::free](#grallocallocator-free)
+- [GrallocAllocator::importBuffer](#grallocallocator-importbuffer)
+- [GrallocAllocator::getSupportedUsage](#grallocallocator-getsupportedusage)
+- [GrallocAllocator::isFormatSupported](#grallocallocator-isformatsupported)
+- [GrallocAllocator::queryFormatInfo](#grallocallocator-queryformatinfo)
+- [GrallocAllocator::dumpState](#grallocallocator-dumpstate)
+- [GrallocAllocator::initializeHal](#grallocallocator-initializehal)
+- [GrallocAllocator::shutdownHal](#grallocallocator-shutdownhal)
+- [GrallocAllocator::allocateInternal](#grallocallocator-allocateinternal)
+- [GrallocMapper::~GrallocMapper](#grallocmapper-~grallocmapper)
+- [GrallocMapper::lock](#grallocmapper-lock)
+- [GrallocMapper::unlock](#grallocmapper-unlock)
+- [GrallocMapper::getMetadata](#grallocmapper-getmetadata)
+- [AllocatorFactory::createDefault](#allocatorfactory-createdefault)
+- [AllocatorFactory::create](#allocatorfactory-create)
+
+---
+
+# GrallocAllocator.cpp
+
+---
+
+| Property | Value |
+|----------|-------|
+| **Location** | `src\GrallocAllocator.cpp` |
+| **Lines** | 269 |
+| **Classes** | 0 |
+| **Functions** | 19 |
 | **Last Updated** | 2026-01-18 20:54 |
 
 ---
@@ -627,4 +666,756 @@ if (allocator) {
 
 This code example demonstrates how to use the `AllocatorFactory` class to create a default GrallocAllocator instance and check for success before using it.
 
-<!-- validation_failed: missing [~GrallocAllocator, allocateAsync, thread, getSupportedUsage, queryFormatInfo, dumpState, initializeHal, shutdownHal, ~GrallocMapper, lock, unlock, getMetadata] -->
+## GrallocAllocator::~GrallocAllocator
+
+### Destructor
+
+The destructor of `GrallocAllocator` is responsible for cleaning up any resources held by the allocator. It calls the `shutdownHal()` method to ensure that all HAL interfaces are properly shut down and released.
+
+#### Purpose
+- Ensures proper cleanup of resources when an instance of `GrallocAllocator` is destroyed.
+- Calls `shutdownHal()` to release any HAL-specific resources, such as file descriptors or other system-level handles.
+
+#### Parameters
+- None
+
+#### Dependencies
+- **HAL Interface**: The destructor relies on the `shutdownHal()` method to properly shut down and release HAL interfaces. This method is defined in the `GrallocAllocator` class and ensures that all HAL-related operations are completed before the object is destroyed.
+
+#### Side Effects
+- Releases any HAL resources held by the allocator.
+- Ensures that no dangling pointers or references exist after the destructor completes.
+
+#### Thread Safety
+- The destructor is thread-safe as it does not modify shared state. However, if there are any asynchronous operations or callbacks involved in shutting down the HAL, they should be handled appropriately to ensure thread safety.
+
+#### Lifecycle
+- This method is called when an instance of `GrallocAllocator` is destroyed. It ensures that all resources are properly released before the object is removed from memory.
+
+#### Usage Example
+
+```cpp
+// Example usage of GrallocAllocator in a context where it is being managed by another class
+class MyImageProcessor {
+public:
+    void processImage() {
+        // Create an instance of GrallocAllocator
+        sp<GrallocAllocator> allocator = new GrallocAllocator();
+
+        // Allocate memory for an image
+        sp<GraphicBuffer> buffer;
+        allocator->allocate(/* parameters */);
+
+        // Process the image using the allocated buffer
+
+        // Free the allocated buffer when done
+        allocator->free(buffer);
+    }
+};
+```
+
+#### Mermaid Diagram
+
+```mermaid
+sequenceDiagram
+    participant Allocator
+    participant ImageProcessor
+
+    ImageProcessor ->> Allocator: Create GrallocAllocator instance
+    Allocator ->> Allocator: Allocate memory for image
+    Allocator -->> ImageProcessor: Return allocated buffer
+    ImageProcessor ->> Allocator: Process image using buffer
+    Allocator ->> Allocator: Free allocated buffer
+```
+
+This documentation provides a comprehensive overview of the destructor's purpose, parameters, dependencies, side effects, thread safety, lifecycle, usage example, and a mermaid diagram to illustrate its flow.
+
+## GrallocAllocator::allocateAsync
+
+### Function Signature
+```cpp
+void GrallocAllocator::allocateAsync(
+    const BufferDescriptor& descriptor,
+    AllocationCallback callback
+)
+```
+
+### Description
+`allocateAsync` is a method of the `GrallocAllocator` class that initiates an asynchronous allocation process for a buffer based on the provided `BufferDescriptor`. This function is designed to handle buffer allocations in a non-blocking manner, allowing other operations to continue while the allocation is being processed.
+
+### Parameters
+
+#### descriptor
+- **Type**: `const BufferDescriptor&`
+- **Purpose**: A reference to a `BufferDescriptor` object that contains all necessary information about the buffer to be allocated. This includes dimensions, format, usage flags, and any additional attributes required for the buffer.
+- **Valid Values**: The `BufferDescriptor` should contain valid values for width, height, format, and other relevant properties as specified by the HAL (Hardware Abstraction Layer) specifications.
+- **Ownership**: The caller retains ownership of the `BufferDescriptor`. It is not modified or destroyed within this function.
+
+#### callback
+- **Type**: `AllocationCallback`
+- **Purpose**: A callback function that will be invoked once the allocation process has completed. This function takes two parameters: an `AllocationStatus` indicating whether the allocation was successful, and a pointer to the allocated `GraphicBuffer`.
+- **Valid Values**: The `AllocationCallback` should be a valid function pointer or lambda that adheres to the signature defined by the HAL.
+- **Ownership**: The caller retains ownership of the callback function. It is not modified or destroyed within this function.
+
+### Side Effects
+- This function launches an asynchronous task on a worker thread using C++11's `std::thread`.
+- The allocated buffer is passed back to the caller through the provided callback function.
+- If the allocation fails, the callback will be invoked with an appropriate error status and a null pointer for the buffer.
+
+### Thread Safety
+- This function is not thread-safe. It assumes that only one thread can call `allocateAsync` at a time on a given instance of `GrallocAllocator`.
+- The caller must ensure proper synchronization if multiple threads are accessing the same `GrallocAllocator` instance concurrently.
+
+### Lifecycle
+- This function is part of the public API and should be used by clients to request asynchronous buffer allocations.
+- It does not have any specific lifecycle requirements beyond being called on a valid instance of `GrallocAllocator`.
+
+### Usage Example
+
+```cpp
+BufferDescriptor descriptor;
+// Initialize descriptor with appropriate values...
+
+auto callback = [](AllocationStatus status, GraphicBuffer* buffer) {
+    if (status == AllocationStatus::SUCCESS) {
+        // Buffer allocation was successful
+        // Use the allocated buffer...
+    } else {
+        // Handle allocation failure
+    }
+};
+
+GrallocAllocator allocator;
+allocator.allocateAsync(descriptor, callback);
+```
+
+### Mermaid Diagram
+
+```mermaid
+graph TD
+    A[allocateAsync] --> B{Is Allocation Successful?}
+    B -- Yes --> C[Callback with Buffer]
+    B -- No --> D[Callback with Error Status]
+```
+
+This diagram illustrates the flow of control when calling `allocateAsync`, showing how the function initiates an asynchronous allocation and handles the result through a callback.
+
+## std::thread
+
+### Function: `std::thread`
+
+**Description:**
+The `std::thread` function is used to create a new thread of execution in the current process. It takes a lambda expression or a callable object as its argument, which will be executed by the newly created thread.
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|----------|------|-------------|
+| `[this, descriptor, callback]() { ... }` | Lambda Expression | A lambda function that encapsulates the logic to allocate a buffer and call the provided callback. The lambda captures `this` pointer, `descriptor`, and `callback` by value. |
+
+**Ownership:**
+- **`this`:** Captured by value.
+- **`descriptor`:** Captured by value.
+- **`callback`:** Captured by value.
+
+**Dependencies:**
+- **GrallocAllocator:** The class that contains the logic for buffer allocation and callback handling.
+
+**Side Effects:**
+- Creates a new thread of execution.
+- Allocates a `GraphicBuffer` using the provided `descriptor`.
+- Calls the `callback` function with the result of the allocation (`status`) and the released `buffer`.
+
+**Thread Safety:**
+- The lambda function is executed in a separate thread, ensuring that it does not interfere with other threads in the process.
+- The captured variables (`this`, `descriptor`, `callback`) are copied into the lambda, which ensures that they remain valid throughout the execution of the lambda.
+
+**Lifecycle:**
+- The thread created by `std::thread` is detached from the current thread. This means it will run independently and does not need to be joined or managed manually.
+- The lambda function captures `this`, so it has access to the member functions and variables of the `GrallocAllocator` class.
+
+**Usage Example:**
+```cpp
+void GrallocAllocator::allocateAsync(const BufferDescriptor& descriptor, std::function<void(AllocationStatus, GraphicBuffer*)> callback) {
+    std::thread([this, descriptor, callback]() {
+        std::unique_ptr<GraphicBuffer> buffer;
+        AllocationStatus status = allocate(descriptor, buffer);
+        callback(status, buffer.release());
+    }).detach();
+}
+```
+
+**Mermaid Diagram:**
+```mermaid
+graph TD
+    A[allocateAsync] --> B{isFormatSupported}
+    B -- Yes --> C[queryFormatInfo]
+    C --> D[initializeHal]
+    D --> E[shutdownHal]
+    E --> F[free]
+    F --> G[importBuffer]
+    G --> H[getSupportedUsage]
+    H --> I[allocate]
+    I --> J{status == AllocationStatus::SUCCESS}
+    J -- Yes --> K[release(buffer)]
+    K --> L[callback(status, buffer.release())]
+    L --> M[detach()]
+```
+
+This diagram illustrates the flow of execution when `allocateAsync` is called, including the steps to allocate a buffer and call the callback function.
+
+## GrallocAllocator::getSupportedUsage
+
+### Description
+The `getSupportedUsage` function returns a bitmask of supported buffer usages for the Gralloc allocator. This method provides information about which buffer usage flags are available and can be used when allocating buffers.
+
+### Parameters
+- **None**
+
+### Return Value
+- **BufferUsage**: A bitmask representing the supported buffer usages. The returned value is a combination of `BufferUsage` enum values, such as `CPU_READ_OFTEN`, `GPU_TEXTURE`, etc.
+
+### Usage Example
+```cpp
+GrallocAllocator allocator;
+BufferUsage supportedUsages = allocator.getSupportedUsage();
+```
+
+### Side Effects
+- This function does not modify any global state or resources.
+- It returns a constant value based on the current configuration of the Gralloc allocator.
+
+### Thread Safety
+- The `getSupportedUsage` function is thread-safe and can be called concurrently from multiple threads without causing data races.
+
+### Lifecycle
+- This function is part of the GrallocAllocator class and is typically used during initialization or when querying buffer capabilities.
+
+### Dependencies
+- This function relies on the underlying hardware capabilities of the device, which are managed by the HAL (Hardware Abstraction Layer) for graphics operations.
+- The `BufferUsage` enum is defined in the Android system headers and provides a set of predefined usage flags that can be used to specify how buffers should be used.
+
+### Mermaid Diagram
+```mermaid
+graph TD;
+    A[getSupportedUsage] --> B[BufferUsage::CPU_READ_OFTEN]
+    A --> C[BufferUsage::CPU_WRITE_OFTEN]
+    A --> D[BufferUsage::GPU_TEXTURE]
+    A --> E[BufferUsage::GPU_RENDER_TARGET]
+    A --> F[CAMERA_INPUT]
+    A --> G[CAMERA_OUTPUT]
+    A --> H[VIDEO_ENCODER]
+    A --> I[VIDEO_DECODER]
+    A --> J[COMPOSER_OVERLAY]
+```
+
+This diagram illustrates the relationship between the `getSupportedUsage` function and the various buffer usage flags it returns.
+
+## GrallocAllocator::queryFormatInfo
+
+### Description
+The `queryFormatInfo` function is designed to determine the actual stride of a buffer based on the specified pixel format and usage flags. This function is crucial for allocating buffers with the correct dimensions and memory layout.
+
+### Parameters
+- **format**: A `PixelFormat` enum value representing the desired pixel format of the buffer.
+  - **Purpose**: Specifies the color depth, number of channels, and other attributes of the pixels in the buffer.
+  - **Valid Values**: Refer to the Android documentation for valid pixel formats. Common formats include `RGBA_8888`, `RGB_565`, etc.
+  - **Ownership**: The caller owns the `PixelFormat` enum value.
+
+- **usage**: A `BufferUsage` enum value representing the intended usage of the buffer, such as rendering or video decoding.
+  - **Purpose**: Indicates how the buffer will be used by other components in the system. Common usages include `BUFFER_USAGE_RENDER`, `BUFFER_USAGE_VIDEO_DECODING`, etc.
+  - **Valid Values**: Refer to the Android documentation for valid buffer usage flags. Common usages include `BUFFER_USAGE_RENDER`, `BUFFER_USAGE_VIDEO_DECODING`, etc.
+  - **Ownership**: The caller owns the `BufferUsage` enum value.
+
+- **outStride**: A reference to a `uint32_t` variable where the actual stride of the buffer will be stored.
+  - **Purpose**: Provides the width of the buffer in pixels, taking into account any padding or alignment requirements.
+  - **Valid Values**: The stride is typically an integer representing the number of bytes per row.
+  - **Ownership**: The caller owns the `uint32_t` variable.
+
+### Return Value
+- **bool**: Returns `true` if the format and usage are supported, otherwise returns `false`.
+
+### Side Effects
+- This function does not modify any global state or shared resources. It only queries the gralloc hardware for information about the buffer stride.
+- The function assumes that the gralloc hardware is properly initialized and available.
+
+### Thread Safety
+- This function is thread-safe as it does not access any shared data structures or mutexes.
+- However, if the gralloc hardware is accessed concurrently by multiple threads, additional synchronization mechanisms may be required to ensure correctness.
+
+### Lifecycle
+- The `queryFormatInfo` function is part of the GrallocAllocator class and is intended to be used within the context of an Android application that interacts with the graphics system.
+- This function is typically called during buffer allocation or when determining the optimal buffer size for a specific use case.
+
+### Usage Example
+
+```cpp
+PixelFormat format = PixelFormat::RGBA_8888;
+BufferUsage usage = BufferUsage::BUFFER_USAGE_RENDER;
+uint32_t stride;
+
+if (GrallocAllocator::queryFormatInfo(format, usage, stride)) {
+    // Use the calculated stride for buffer allocation
+} else {
+    // Handle unsupported format or usage combination
+}
+```
+
+### Mermaid Diagram
+
+```mermaid
+graph TD
+    A[Caller] --> B[GrallocAllocator::queryFormatInfo]
+    B --> C{Is Format and Usage Supported?}
+    C -- Yes --> D[Store Stride in outStride]
+    C -- No --> E[Return False]
+```
+
+### Dependencies
+- This function relies on the gralloc hardware to determine the actual stride of a buffer. The gralloc hardware is accessed through the Android Binder IPC mechanisms, which are part of the Android system services.
+- The `GrallocAllocator` class depends on the `BufferUsage` and `PixelFormat` enums, which are defined in the Android framework headers.
+
+### Notes
+- This function does not handle any errors or exceptions. It assumes that the gralloc hardware is functioning correctly and that the input parameters are valid.
+- If the gralloc hardware fails to provide a stride value, the function will return `false`, indicating that the format and usage combination is unsupported.
+
+## GrallocAllocator::dumpState
+
+### Summary
+The `dumpState` function provides a detailed string representation of the current state of the `GrallocAllocator`. This method is useful for debugging and monitoring the allocator's internal status.
+
+### Parameters
+- **None**
+
+### Return Value
+- **std::string**: A human-readable string containing information about the allocator's version, active buffer count, and cache hit rate.
+
+### Usage Example
+```cpp
+#include <GrallocAllocator.h>
+
+int main() {
+    GrallocAllocator allocator;
+    std::string state = allocator.dumpState();
+    std::cout << "Allocator State:\n" << state << std::endl;
+    return 0;
+}
+```
+
+### Side Effects
+- This function does not modify any global or static variables.
+- It accesses the `version_`, `activeBuffers_`, and `cache_` member variables of the `GrallocAllocator` class.
+
+### Thread Safety
+- The `dumpState` function is thread-safe as it does not access or modify any shared resources that could be accessed by other threads. However, if the allocator's state changes concurrently, the output may reflect an inconsistent snapshot of the allocator's current state.
+
+### Lifecycle
+- This function is part of the public API and can be called from any thread.
+- The `GrallocAllocator` class ensures that this function is properly synchronized to avoid race conditions when accessed by multiple threads.
+
+## GrallocAllocator::initializeHal
+
+### Description
+The `initializeHal` function initializes the Android Hardware Abstraction Layer (HAL) for the GrallocAllocator. This function is crucial for setting up the necessary resources and interfaces required to interact with the underlying graphics hardware.
+
+### Parameters
+- **None**
+
+### Return Value
+- **bool**: Returns `true` if the initialization is successful, otherwise returns `false`.
+
+### Dependencies
+- The function relies on the Android HAL framework, specifically the `hardware::graphics::allocator::V4_0::IAllocator` interface. This interface provides access to the Gralloc allocator service.
+
+### Side Effects
+- The function initializes the HAL interface and sets up any necessary resources required for interacting with the graphics hardware.
+- It may also trigger a system call or perform other operations that require elevated permissions, such as opening device files or accessing system services.
+
+### Thread Safety
+- This function is not thread-safe. Access to shared resources should be synchronized if multiple threads are involved in using the GrallocAllocator.
+
+### Lifecycle
+- The `initializeHal` function is typically called during the initialization of the GrallocAllocator object. It sets up the necessary HAL interface and prepares the allocator for use.
+
+### Usage Example
+
+```cpp
+GrallocAllocator allocator;
+if (allocator.initializeHal()) {
+    // Allocator initialized successfully, can now allocate buffers
+} else {
+    // Initialization failed, handle error
+}
+```
+
+### Mermaid Diagram
+
+```mermaid
+sequenceDiagram
+    participant GrallocAllocator
+    participant HALInterface
+
+    Note left of GrallocAllocator: Initialize HAL
+    GrallocAllocator->>HALInterface: Get IAllocator service
+    HALInterface-->>GrallocAllocator: Return IAllocator interface
+    GrallocAllocator->>GrallocAllocator: Set halHandle_ to the returned interface
+```
+
+### Notes
+- The `gralloc` variable is commented out in the provided code snippet. In a real implementation, this line would be used to obtain the HAL service.
+- The function assumes that the necessary permissions and resources are already available for interacting with the graphics hardware.
+
+This documentation provides a comprehensive overview of the `initializeHal` function, including its purpose, parameters, return value, dependencies, side effects, thread safety, lifecycle, usage examples, and a mermaid diagram to illustrate the flow.
+
+## GrallocAllocator::shutdownHal
+
+### Description
+The `shutdownHal` function is responsible for shutting down the HAL interface used by the `GrallocAllocator` class. This function sets the `halHandle_` member variable to `nullptr`, effectively disconnecting from the HAL and releasing any resources held by the allocator.
+
+### Parameters
+- **None**
+
+### Dependencies
+- None
+
+### Side Effects
+- The HAL handle is set to `nullptr`.
+- Any resources associated with the HAL interface are released.
+- The function does not return a value.
+
+### Lifecycle
+- This function is called when the `GrallocAllocator` object is being destroyed or when it needs to gracefully shut down its HAL connection.
+
+### Usage Example
+```cpp
+// Example usage of GrallocAllocator::shutdownHal
+GrallocAllocator allocator;
+allocator.shutdownHal();
+```
+
+### Mermaid Diagram
+```mermaid
+sequenceDiagram
+    participant Allocator
+    participant HalInterface
+
+    Allocator->>HalInterface: shutdownHal()
+    HalInterface-->>Allocator: HAL disconnected
+```
+
+This function is crucial for ensuring that the `GrallocAllocator` object can properly clean up its resources and disconnect from the HAL interface when it is no longer needed, preventing memory leaks or resource conflicts.
+
+## GrallocMapper::~GrallocMapper
+
+### Destructor
+
+The destructor of `GrallocMapper` is responsible for cleaning up any resources held by the object. Specifically, it sets the `mapperHandle_` member variable to `nullptr`, which indicates that the mapper handle has been released and should no longer be used.
+
+#### Parameters
+- **None**
+
+#### Side Effects
+- The destructor releases the `mapperHandle_`, ensuring that any associated memory or resources are properly freed.
+- It does not affect other parts of the system since it is a local object with no global state.
+
+#### Thread Safety
+- This function is thread-safe as it does not modify any shared data structures. However, if there are any external references to `mapperHandle_`, they should be handled appropriately to avoid dangling pointers or memory leaks.
+
+#### Lifecycle
+- The destructor is called when the `GrallocMapper` object goes out of scope or is explicitly deleted. It ensures that all resources are released before the object is destroyed.
+
+### Usage Example
+
+```cpp
+// Example usage of GrallocMapper in a context where it manages buffer allocation and mapping
+GrallocAllocator allocator;
+GrallocMapper mapper = allocator.createMapper();
+
+// Use the mapper to allocate memory for a buffer
+sp<GraphicBuffer> buffer = mapper.allocate(width, height, format);
+
+// Perform operations on the buffer...
+
+// When done with the buffer, release it back to the allocator
+mapper.free(buffer);
+```
+
+### Mermaid Diagram
+
+```mermaid
+sequenceDiagram
+    participant Allocator as GrallocAllocator
+    participant Mapper as GrallocMapper
+    participant Buffer as GraphicBuffer
+
+    Allocator->>Mapper: createMapper()
+    Mapper-->>Allocator: return mapper
+    Mapper->>Allocator: allocate(width, height, format)
+    Mapper-->>Allocator: return buffer
+    Mapper->>Allocator: free(buffer)
+```
+
+This diagram illustrates the sequence of operations involved in creating a `GrallocMapper`, allocating a buffer using it, and then freeing the buffer back to the allocator.
+
+## GrallocMapper::lock
+
+### Function Signature
+```cpp
+bool GrallocMapper::lock(
+    const NativeHandle& handle,
+    BufferUsage usage,
+    const MappedRegion* region,
+    void** outData
+)
+```
+
+### Description
+The `lock` function is responsible for locking a buffer associated with the provided `NativeHandle`. This function is crucial for accessing and modifying the contents of a graphics buffer, which is essential for rendering operations in Android applications. The function takes several parameters to specify the buffer's usage, region, and output data pointer.
+
+### Parameters
+- **handle**: A `const NativeHandle&` representing the handle to the buffer that needs to be locked. This handle must be valid.
+  - **Purpose**: Identifies the specific buffer to be accessed.
+  - **Valid Values**: A valid `NativeHandle` object obtained from a previous call to `allocate` or `importBuffer`.
+  - **Ownership**: The caller retains ownership of this handle.
+
+- **usage**: A `BufferUsage` enum value indicating how the buffer will be used. This parameter is used by the HAL (Hardware Abstraction Layer) to determine the appropriate memory allocation and access modes.
+  - **Purpose**: Specifies the intended usage of the buffer, such as rendering or video decoding.
+  - **Valid Values**: Enum values defined in the `BufferUsage` enum, which can include flags like `BUFFER_USAGE_RENDER_TARGET`, `BUFFER_USAGE_VIDEO_DECODING`, etc.
+  - **Ownership**: The caller retains ownership of this value.
+
+- **region**: A pointer to a `const MappedRegion*` object that specifies the region within the buffer to be locked. If `nullptr`, the entire buffer is locked.
+  - **Purpose**: Allows for locking only specific parts of the buffer, which can improve performance and memory usage.
+  - **Valid Values**: A valid `MappedRegion` object or `nullptr`.
+  - **Ownership**: The caller retains ownership of this pointer.
+
+- **outData**: A pointer to a `void**` that will be populated with the address of the locked buffer data. This is where the actual mapped memory pointer will be stored.
+  - **Purpose**: Provides access to the buffer's contents for reading or writing.
+  - **Valid Values**: A valid pointer to a `void*`.
+  - **Ownership**: The caller retains ownership of this pointer.
+
+### Return Value
+- **bool**: Returns `true` if the lock operation is successful, otherwise returns `false`.
+
+### Side Effects
+- Locking a buffer can cause memory access restrictions and may require synchronization with other threads or processes.
+- The function modifies the `outData` parameter to point to the locked buffer's data.
+
+### Thread Safety
+- This function is not thread-safe. Access to shared resources must be synchronized using appropriate mutexes or locks if multiple threads are involved.
+
+### Lifecycle
+- This function is typically called during rendering operations, where the buffer needs to be accessed and modified.
+- The buffer should be unlocked after use by calling `unlock` with the same handle and region.
+
+### Usage Example
+```cpp
+NativeHandle handle = ...; // Obtain a valid NativeHandle from GrallocAllocator::allocate or importBuffer
+BufferUsage usage = BUFFER_USAGE_RENDER_TARGET;
+MappedRegion* region = nullptr; // Lock the entire buffer
+
+void* data;
+if (GrallocMapper::lock(handle, usage, region, &data)) {
+    // Use the mapped data for rendering operations
+    // ...
+    
+    GrallocMapper::unlock(handle, usage, region, &data);
+} else {
+    // Handle lock failure
+}
+```
+
+### Mermaid Diagram
+```mermaid
+graph TD;
+    A[lock] --> B{handle.isValid()};
+    B -- true --> C{region == nullptr};
+    C -- true --> D[mapper->lock()];
+    D --> E[*outData = actual mapped pointer];
+    E --> F[true];
+    B -- false --> G[false];
+```
+
+### Dependencies
+- This function relies on the `GrallocMapper` class, which provides methods for managing buffer allocations and mappings.
+- The `NativeHandle`, `BufferUsage`, and `MappedRegion` classes are used to specify the buffer handle, usage flags, and region details.
+
+This documentation provides a comprehensive overview of the `lock` function's purpose, parameters, return value, side effects, thread safety, lifecycle, usage examples, and dependencies.
+
+## GrallocMapper::unlock
+
+### Description
+The `unlock` function is responsible for releasing the lock on a buffer that was previously allocated using the `GrallocAllocator`. This function is crucial for synchronizing access to GPU-accelerated resources and ensuring proper resource management.
+
+### Parameters
+- **handle**: A `NativeHandle` object representing the buffer handle. This handle must be valid before calling this function.
+  - **Purpose**: The buffer handle uniquely identifies the buffer that needs to be unlocked.
+  - **Valid Values**: Any valid buffer handle obtained from the `GrallocAllocator`.
+  - **Ownership**: The caller retains ownership of the `NativeHandle` and is responsible for releasing it after use.
+
+- **outFence**: A pointer to an integer where the fence object associated with the unlock operation will be stored. This parameter is optional.
+  - **Purpose**: If a fence is available, this function stores the fence object in the provided location. The fence can be used to synchronize operations between different parts of the system.
+  - **Valid Values**: A valid fence object or `nullptr`.
+  - **Ownership**: The caller retains ownership of the fence object and is responsible for releasing it after use.
+
+### Return Value
+- **bool**: Returns `true` if the unlock operation was successful, otherwise returns `false`.
+
+### Side Effects
+- This function releases the lock on the buffer, allowing other components to access or modify the buffer.
+- It does not affect the underlying hardware resources associated with the buffer.
+
+### Thread Safety
+- The `unlock` function is thread-safe and can be called concurrently from multiple threads without causing data races.
+
+### Lifecycle
+- This function is part of the GrallocAllocator class, which manages GPU-accelerated buffers. The allocator must be initialized before calling this function.
+- The allocator should be properly shut down after use to release any resources held by it.
+
+### Usage Example
+
+```cpp
+#include <gralloc/GrallocMapper.h>
+#include <android/native_handle.h>
+
+int main() {
+    GrallocAllocator allocator;
+    NativeHandle handle;  // Assume handle is initialized and valid
+
+    int fence = -1;
+    bool success = allocator.unlock(handle, &fence);
+
+    if (success) {
+        // Buffer has been successfully unlocked
+        // Use the fence for synchronization if needed
+    } else {
+        // Handle error
+    }
+
+    return 0;
+}
+```
+
+### Mermaid Diagram
+
+```mermaid
+sequenceDiagram
+    participant Allocator as GrallocAllocator
+    participant Handle as NativeHandle
+    participant Fence as int*
+
+    Allocator->>Handle: unlock(handle, fence)
+    Handle-->>Allocator: Return true if successful
+    Note right of Allocator: Release lock on buffer
+```
+
+### Dependencies
+
+- **GrallocAllocator**: The `unlock` function is a member of the `GrallocAllocator` class and relies on its internal state to perform the unlock operation.
+- **NativeHandle**: The `handle` parameter is a `NativeHandle` object, which is used to identify and manage GPU-accelerated buffers.
+
+### Notes
+
+- This function does not handle errors or edge cases such as invalid buffer handles or fence objects. Proper error handling should be implemented in the calling code.
+- The actual implementation of the unlock operation would involve interacting with the underlying hardware resources managed by the GrallocAllocator, which is beyond the scope of this documentation.
+
+## GrallocMapper::getMetadata
+
+### Description
+The `getMetadata` function retrieves metadata associated with a given buffer handle. This is crucial for understanding the properties of the buffer, such as its dimensions, format, and usage flags.
+
+### Parameters
+- **handle**: A `NativeHandle` object representing the buffer whose metadata needs to be retrieved.
+  - **Purpose**: Identifies the specific buffer for which metadata is requested.
+  - **Valid Values**: A valid handle obtained from a previous call to `allocate` or `importBuffer`.
+  - **Ownership**: The caller retains ownership of the `NativeHandle`.
+
+- **metadataType**: An integer representing the type of metadata to retrieve. This can be one of several predefined constants, such as `GRALLOC4_BUFFER_METADATA_FORMAT`, `GRALLOC4_BUFFER_METADATA_WIDTH`, etc.
+  - **Purpose**: Specifies which specific piece of metadata is required.
+  - **Valid Values**: A valid metadata type defined by the HAL (Hardware Abstraction Layer).
+  - **Ownership**: The caller retains ownership of this integer.
+
+- **outData**: A pointer to a buffer where the retrieved metadata will be stored. This buffer must be large enough to hold the requested metadata.
+  - **Purpose**: Receives the actual metadata data.
+  - **Valid Values**: A valid pointer to a memory location that can accommodate the metadata size.
+  - **Ownership**: The caller retains ownership of this pointer.
+
+- **size**: A reference to a `size_t` variable that will be updated with the size of the retrieved metadata.
+  - **Purpose**: Provides the length of the metadata data stored in `outData`.
+  - **Valid Values**: A valid reference to a `size_t` variable.
+  - **Ownership**: The caller retains ownership of this reference.
+
+### Return Value
+- **bool**: Returns `true` if the metadata was successfully retrieved and stored in `outData`. Otherwise, returns `false`.
+
+### Side Effects
+- Modifies the `outData` buffer with the retrieved metadata.
+- Updates the `size` variable to reflect the size of the metadata data.
+
+### Thread Safety
+- This function is not thread-safe. Access to shared resources or state must be synchronized if accessed from multiple threads.
+
+### Lifecycle
+- The `getMetadata` function should only be called after a buffer has been successfully allocated or imported using the GrallocAllocator.
+- Ensure that the `NativeHandle` remains valid throughout the duration of the metadata retrieval process.
+
+### Usage Example
+
+```cpp
+#include <gralloc4.h>
+#include <android/native_handle.h>
+
+int main() {
+    // Create a NativeHandle for a buffer
+    android_native_handle_t* handle = ...;
+
+    // Allocate memory and get a GrallocMapper instance
+    GrallocAllocator allocator;
+    void* outData;
+    size_t size;
+    bool success = allocator.allocate(handle, 1024 * 768, GRALLOC4_USAGE_HW_TEXTURE | GRALLOC4_USAGE_SW_READ_OFTEN, &outData, &size);
+
+    if (success) {
+        // Retrieve metadata
+        uint32_t metadataType = GRALLOC4_BUFFER_METADATA_FORMAT;
+        success = allocator.getMetadata(*handle, metadataType, outData, size);
+
+        if (success) {
+            // Process the retrieved metadata
+            const Gralloc4BufferMetadata* metadata = static_cast<const Gralloc4BufferMetadata*>(outData);
+            printf("Format: %d\n", metadata->format);
+            printf("Width: %u\n", metadata->width);
+            printf("Height: %u\n", metadata->height);
+        } else {
+            // Handle error
+            printf("Failed to retrieve metadata\n");
+        }
+    } else {
+        // Handle error
+        printf("Failed to allocate buffer\n");
+    }
+
+    // Free the allocated memory and handle
+    allocator.free(handle);
+
+    return 0;
+}
+```
+
+### Mermaid Diagram
+
+```mermaid
+sequenceDiagram
+    participant Allocator
+    participant NativeHandle
+    participant BufferMetadata
+
+    Allocator->>NativeHandle: Allocate(1024 * 768, GRALLOC4_USAGE_HW_TEXTURE | GRALLOC4_USAGE_SW_READ_OFTEN)
+    Note right of Allocator: Returns a valid handle and buffer size
+    
+    Allocator->>Allocator: GetMetadata(handle, GRALLOC4_BUFFER_METADATA_FORMAT, outData, size)
+    Note right of Allocator: Retrieves metadata from gralloc4
+
+    Allocator-->>NativeHandle: Free(handle)
+```
+
+This documentation provides a comprehensive overview of the `getMetadata` function, including its purpose, parameters, return value, side effects, thread safety, lifecycle, usage examples, and a mermaid diagram for better understanding.

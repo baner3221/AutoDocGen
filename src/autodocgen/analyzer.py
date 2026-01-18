@@ -4,6 +4,7 @@ Main analyzer that orchestrates the documentation generation pipeline.
 
 from pathlib import Path
 from typing import Optional
+import re
 import fnmatch
 
 from rich.console import Console
@@ -233,21 +234,19 @@ class CodebaseAnalyzer:
         # Generate output files
         self.doc_generator.write_file_documentation(file_path, analysis, analysis.file_documentation)
 
-    def _verify_documentation(self, analysis: CppFileAnalysis, documentation: str) -> None:
+    def _verify_documentation(self, analysis: CppFileAnalysis, documentation: str) -> list[str]:
         """
         Verify that all functions in the analysis are present in the documentation.
-        Appends a failure marker if any are missing.
+        Returns a list of missing function names.
         """
         import re
         missing_functions = []
         
         for func in analysis.functions:
             # Robust Check: Look for the function name in a Markdown Header
-            # We strictly require it to appear in a header line (starting with #)
-            # This prevents false positives from "Related Functions" tables or running text
             pattern = fr"^#+\s+.*{re.escape(func.name)}"
             match = re.search(pattern, documentation, re.MULTILINE | re.IGNORECASE)
-            # console.print(f"[debug] Checking {func.name}: {'FOUND' if match else 'MISSING'}")
+            
             if not match:
                 missing_functions.append(func.name)
         
@@ -258,6 +257,84 @@ class CodebaseAnalyzer:
             # Append marker to documentation if not already present
             if "validation_failed" not in analysis.file_documentation:
                 analysis.file_documentation += marker
+                
+        return missing_functions
+
+    def repair_documentation(self, file_path: Path, analysis: CppFileAnalysis) -> bool:
+        """
+        Repair documentation for a file by generating missing function docs individually.
+        Returns True if repair was successful.
+        """
+        # Load existing documentation
+        existing_doc = self.doc_generator.read_documentation(file_path)
+        if not existing_doc:
+            console.print(f"[yellow]No existing documentation found for {file_path.name}, skipping repair.[/]")
+            return False
+
+        # Identify missing functions
+        missing_names = self._verify_documentation(analysis, existing_doc)
+        if not missing_names:
+            console.print(f"[green]Documentation for {file_path.name} is already complete.[/]")
+            return True
+
+        console.print(f"[bold cyan]Repairing {file_path.name}: Generating docs for {len(missing_names)} missing functions...[/]")
+        
+        new_docs = []
+        system_prompt = self.prompt_builder.get_system_prompt()
+        
+        for func_name in missing_names:
+            # Find the function object
+            func_info = next((f for f in analysis.functions if f.name == func_name), None)
+            if not func_info:
+                continue
+
+            # Build a mini-prompt for just this function
+            # We include the class context if available
+            context_str = f"## Context\nFile: {file_path.name}\n"
+            if func_info.qualified_name:
+                context_str += f"Function: {func_info.qualified_name}\n"
+            
+            # Provide existing doc summary as context
+            context_str += "\n## Existing Documentation Summary\n"
+            context_str += existing_doc[:1000] + "...\n(truncated)"
+
+            prompt = f"""
+{context_str}
+
+## Task
+Generate documentation for the following SINGLE function which is missing from the file.
+Return ONLY the markdown documentation for this function, starting with a level 2 header (##).
+
+```cpp
+{func_info.body_code}
+```
+"""
+            # Query LLM
+            response = self.llm_client.generate(prompt, system_prompt)
+            if not response.error:
+                new_docs.append(response.content)
+                console.print(f"[green]  + Generated doc for {func_name}[/]")
+            else:
+                console.print(f"[red]  ! Failed to generate doc for {func_name}: {response.error}[/]")
+
+        if new_docs:
+            # Append new docs to the file
+            append_content = "\n\n" + "\n\n".join(new_docs)
+            
+            # Remove the validation failure marker
+            fixed_doc = re.sub(r"\n\n<!-- validation_failed:.*?-->", "", existing_doc, flags=re.DOTALL)
+            
+            # Append
+            final_doc = fixed_doc + append_content
+            
+            # Update analysis and write to disk
+            analysis.file_documentation = final_doc
+            self.doc_generator.write_file_documentation(file_path, analysis, final_doc)
+            
+            console.print(f"[bold green]Successfully repaired {file_path.name}![/]")
+            return True
+        
+        return False
 
     def _document_file_with_context(
         self,

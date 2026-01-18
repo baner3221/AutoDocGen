@@ -58,6 +58,23 @@ class DocumentationGenerator:
 
         return doc_path
 
+    def read_documentation(self, file_path: Path) -> Optional[str]:
+        """
+        Read existing documentation for a source file.
+        
+        Args:
+            file_path: Original source file path
+            
+        Returns:
+            String content of documentation if exists, else None
+        """
+        relative = file_path.relative_to(self.config.codebase_path)
+        doc_path = self.output_path / relative.with_suffix(".md")
+        
+        if doc_path.exists():
+            return doc_path.read_text(encoding="utf-8")
+        return None
+
     def _generate_header(self, file_path: Path, analysis: CppFileAnalysis) -> str:
         """Generate the documentation header."""
         relative = file_path.relative_to(self.config.codebase_path)

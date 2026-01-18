@@ -8,6 +8,45 @@
 | **Lines** | 259 |
 | **Classes** | 0 |
 | **Functions** | 19 |
+| **Last Updated** | 2026-01-18 21:17 |
+
+---
+
+## Quick Navigation
+
+### Functions
+- [BufferPool::BufferPool](#bufferpool-bufferpool)
+- [BufferPool::~BufferPool](#bufferpool-~bufferpool)
+- [BufferPool::acquireBuffer](#bufferpool-acquirebuffer)
+- [BufferPool::acquireBuffer](#bufferpool-acquirebuffer)
+- [BufferPool::releaseBuffer](#bufferpool-releasebuffer)
+- [BufferPool::grow](#bufferpool-grow)
+- [BufferPool::shrink](#bufferpool-shrink)
+- [BufferPool::flush](#bufferpool-flush)
+- [BufferPool::getStatistics](#bufferpool-getstatistics)
+- [BufferPool::addListener](#bufferpool-addlistener)
+- [BufferPool::removeListener](#bufferpool-removelistener)
+- [BufferPool::getFreeCount](#bufferpool-getfreecount)
+- [BufferPool::getTotalCount](#bufferpool-gettotalcount)
+- [BufferPool::isFull](#bufferpool-isfull)
+- [BufferPool::isEmpty](#bufferpool-isempty)
+- [BufferPool::notifyBufferAcquired](#bufferpool-notifybufferacquired)
+- [BufferPool::notifyBufferReleased](#bufferpool-notifybufferreleased)
+- [BufferPool::notifyPoolGrew](#bufferpool-notifypoolgrew)
+- [BufferPool::notifyPoolShrunk](#bufferpool-notifypoolshrunk)
+
+---
+
+# BufferPool.cpp
+
+---
+
+| Property | Value |
+|----------|-------|
+| **Location** | `src\BufferPool.cpp` |
+| **Lines** | 259 |
+| **Classes** | 0 |
+| **Functions** | 19 |
 | **Last Updated** | 2026-01-18 20:45 |
 
 ---
@@ -618,4 +657,540 @@ int main() {
 
 In this example, `MyBufferPoolListener` is a class that implements the `BufferPool::Listener` interface. It overrides the `onPoolGrew` and `onPoolShrunk` methods to handle pool growth and shrink events, respectively. The `BufferPool` instance is then configured to use this listener, and the functions are called to simulate pool changes.
 
-<!-- validation_failed: missing [~BufferPool, getStatistics, addListener, removeListener, getFreeCount, getTotalCount, isFull, isEmpty, notifyBufferAcquired, notifyBufferReleased] -->
+## BufferPool::~BufferPool
+
+### Destructor
+
+**Description:**
+The destructor of the `BufferPool` class is responsible for cleaning up resources and releasing any allocated buffers. It ensures that all buffers are properly released before the object is destroyed.
+
+**Parameters:**
+- None
+
+**Dependencies:**
+- `std::mutex`: Used to synchronize access to shared data structures like `freeBuffers_` and `allBuffers_`.
+
+**Side Effects:**
+- All buffers in the pool are released.
+- Any listeners registered with the buffer pool are removed.
+
+**Thread Safety:**
+- The destructor is thread-safe due to the use of a `std::lock_guard<std::mutex>`. This ensures that only one thread can execute the destructor at a time, preventing race conditions when accessing shared resources.
+
+**Lifecycle:**
+- The destructor is called automatically when an object of type `BufferPool` goes out of scope or is explicitly deleted. It is crucial to ensure proper cleanup to avoid memory leaks or resource corruption.
+
+**Usage Example:**
+
+```cpp
+// Create and use a BufferPool instance
+sp<BufferPool> bufferPool = new BufferPool();
+
+// Perform operations on the buffer pool
+
+// When done, delete the buffer pool object to trigger its destructor
+delete bufferPool;
+```
+
+**Mermaid Diagram:**
+```mermaid
+sequenceDiagram
+    participant BufferPool
+    participant Mutex
+    participant FreeBuffers
+    participant AllBuffers
+    
+    BufferPool->>Mutex: Lock mutex_
+    Mutex-->>BufferPool: Acquire lock
+    BufferPool->>FreeBuffers: Clear all buffers
+    FreeBuffers-->>BufferPool: Buffers cleared
+    BufferPool->>AllBuffers: Clear all buffers
+    AllBuffers-->>BufferPool: Buffers cleared
+    BufferPool->>Mutex: Unlock mutex_
+    Mutex-->>BufferPool: Release lock
+```
+
+**Notes:**
+- The destructor ensures that all resources are released, which is important for maintaining the integrity of the system and preventing memory leaks.
+- Proper cleanup is essential to avoid resource contention or corruption when multiple threads access shared data structures.
+
+## BufferPool::getStatistics
+
+### Description
+The `getStatistics` function retrieves the current statistics of the buffer pool. This includes information about the number of free buffers, total allocated buffers, and the hit rate of reusing buffers.
+
+### Parameters
+- **None**
+
+### Return Value
+- `PoolStatistics`: An object containing the following statistics:
+  - `freeBuffers`: The number of currently available buffers in the pool.
+  - `allocationCount`: The total number of times a buffer has been allocated from the pool.
+  - `reuseCount`: The number of times a previously released buffer has been reused.
+  - `hitRate`: A double representing the ratio of reuseCount to allocationCount, indicating how often buffers are being re-used.
+
+### Side Effects
+- This function locks the internal mutex to ensure thread safety when accessing shared state.
+- It calculates the hit rate by dividing the number of reuse operations by the total number of allocations.
+
+### Thread Safety
+- The function is thread-safe due to the use of a `std::lock_guard` to manage the lock on the internal mutex. This ensures that only one thread can access the buffer pool's state at a time, preventing race conditions.
+
+### Lifecycle
+- This function is part of the public API and should be used by clients to monitor the buffer pool's performance.
+
+### Usage Example
+
+```cpp
+BufferPool* pool = new BufferPool();
+// Assume some buffers are allocated and released...
+
+PoolStatistics stats = pool->getStatistics();
+std::cout << "Free Buffers: " << stats.freeBuffers << std::endl;
+std::cout << "Allocation Count: " << stats.allocationCount << std::endl;
+std::cout << "Reuse Count: " << stats.reuseCount << std::endl;
+std::cout << "Hit Rate: " << stats.hitRate << std::endl;
+
+delete pool;
+```
+
+### Mermaid Diagram
+
+```mermaid
+graph TD
+    A[BufferPool::getStatistics] --> B{Is mutex locked?}
+    B -- Yes --> C[Lock acquired]
+    C --> D[Calculate freeBuffers]
+    D --> E{Is allocationCount > 0?}
+    E -- No --> F[Return stats]
+    E -- Yes --> G[Calculate hitRate]
+    G --> H[Return stats]
+```
+
+This diagram illustrates the flow of execution for the `getStatistics` function, including the locking mechanism and conditional calculations based on the pool's state.
+
+## Function: BufferPool::addListener
+
+### Purpose
+`addListener` is a method of the `BufferPool` class that adds a new listener to the buffer pool. This listener will be notified when certain events occur within the buffer pool, such as buffer acquisition or release.
+
+### Parameters
+- **listener**: A pointer to an instance of `BufferPoolListener`. This parameter represents the listener object that will receive notifications from the buffer pool.
+  - **Purpose**: The listener is responsible for handling events related to the buffer pool. It can be used to monitor buffer usage, manage resources, or perform other actions based on buffer pool operations.
+  - **Valid Values**: Any valid pointer to a `BufferPoolListener` object.
+  - **Ownership**: The caller of this function is responsible for managing the lifecycle of the listener. The listener should not outlive the buffer pool.
+
+### Dependencies
+- **BufferPoolListener**: This class defines the interface that all listeners must implement. It includes methods such as `onBufferAcquired`, `onBufferReleased`, and others that will be called by the buffer pool when specific events occur.
+  - **Cross-referenced with Links**: Refer to the documentation for `BufferPoolListener` for more details.
+
+### Side Effects
+- This method adds a new listener to the internal list of listeners. It does not modify any other state or resources within the buffer pool.
+- The listener will be notified asynchronously when events occur, which may result in additional work being performed by the listener.
+
+### Thread Safety
+- This method is thread-safe and can be called from multiple threads simultaneously without causing data races.
+  - **Thread Safety**: The method uses a `std::lock_guard` to ensure that only one thread can execute this method at a time, preventing concurrent modifications to the list of listeners.
+
+### Lifecycle
+- The listener added by this method will remain active until it is explicitly removed using the `removeListener` method.
+  - **Lifecycle**: The buffer pool retains ownership of the listener and is responsible for managing its lifecycle. The listener should not attempt to delete itself or rely on automatic deletion mechanisms.
+
+### Usage Examples
+
+```cpp
+class MyBufferPoolListener : public BufferPoolListener {
+public:
+    void onBufferAcquired(Buffer* buffer) override {
+        // Handle buffer acquisition event
+    }
+
+    void onBufferReleased(Buffer* buffer) override {
+        // Handle buffer release event
+    }
+};
+
+int main() {
+    BufferPool pool;
+    MyBufferPoolListener listener;
+
+    pool.addListener(&listener);
+
+    // Use the buffer pool...
+
+    pool.removeListener(&listener);
+}
+```
+
+### Mermaid Diagram
+
+```mermaid
+sequenceDiagram
+    participant BP as BufferPool
+    participant L as MyBufferPoolListener
+
+    BP->>L: addListener(listener)
+    L->>BP: onBufferAcquired(buffer)
+    L->>BP: onBufferReleased(buffer)
+    BP->>L: removeListener(listener)
+```
+
+This diagram illustrates the sequence of events when a listener is added to and removed from a buffer pool, showing how the listener receives notifications about buffer acquisition and release.
+
+## Function: BufferPool::removeListener
+
+### Description
+The `removeListener` function is responsible for removing a specified listener from the buffer pool's list of registered listeners. This function ensures thread safety by acquiring a lock on the internal mutex before performing any operations.
+
+### Parameters
+- **listener**: A pointer to the `BufferPoolListener` object that needs to be removed from the buffer pool.
+  - **Purpose**: The listener is an interface that defines methods for receiving notifications about buffer pool events such as buffer acquisition, release, or changes in capacity.
+  - **Valid Values**: Any valid instance of a class that implements the `BufferPoolListener` interface.
+  - **Ownership**: The caller retains ownership of the `listener` object. It is not deleted by this function.
+
+### Dependencies
+- **BufferPoolListener**: This function depends on the `BufferPoolListener` interface, which must be implemented by any listener classes that want to receive notifications from the buffer pool.
+
+### Side Effects
+- **Removal of Listener**: The specified listener will no longer receive notifications from the buffer pool.
+- **Thread Safety**: The function ensures thread safety by acquiring a lock on the internal mutex before modifying the list of listeners. This prevents race conditions where multiple threads attempt to modify the list simultaneously.
+
+### Lifecycle
+- **Initialization**: The `removeListener` function is called when a listener needs to be removed from the buffer pool.
+- **Termination**: There are no specific lifecycle events associated with this function, as it does not manage any resources or perform cleanup actions.
+
+### Usage Example
+To use the `removeListener` function, you would typically create an instance of a class that implements the `BufferPoolListener` interface and pass its pointer to the buffer pool. Here is an example:
+
+```cpp
+class MyBufferPoolListener : public BufferPoolListener {
+public:
+    void onBufferAcquired(Buffer* buffer) override {
+        // Handle buffer acquisition event
+    }
+
+    void onBufferReleased(Buffer* buffer) override {
+        // Handle buffer release event
+    }
+};
+
+// Create a buffer pool instance
+BufferPool bufferPool;
+
+// Create an instance of MyBufferPoolListener
+MyBufferPoolListener listener;
+
+// Add the listener to the buffer pool
+bufferPool.addListener(&listener);
+
+// Later, remove the listener from the buffer pool
+bufferPool.removeListener(&listener);
+```
+
+### Mermaid Diagram
+
+```mermaid
+graph TD;
+    A[BufferPool] --> B[addListener]
+    C[MyBufferPoolListener] --> D[onBufferAcquired]
+    E[MyBufferPoolListener] --> F[onBufferReleased]
+    G[BufferPool] --> H[removeListener]
+```
+
+This diagram illustrates the flow of events when adding and removing a listener from the buffer pool.
+
+## BufferPool::getFreeCount
+
+### Description
+The `getFreeCount` function returns the number of free buffers available in the buffer pool. This is a read-only operation that provides an immediate snapshot of the current state of the buffer pool without locking.
+
+### Parameters
+- **None**
+
+### Return Value
+- **uint32_t**: The number of free buffers currently in the buffer pool.
+
+### Usage Example
+```cpp
+BufferPool* pool = new BufferPool();
+uint32_t freeCount = pool->getFreeCount();
+```
+
+### Side Effects
+- None
+
+### Thread Safety
+- This function is thread-safe as it uses a `std::lock_guard` to protect access to the `freeBuffers_` vector. The lock ensures that only one thread can modify the buffer pool at a time, preventing race conditions.
+
+### Lifecycle
+- This function is part of the public API and should be used by clients to query the current state of the buffer pool without modifying it.
+
+### Dependencies
+- None
+
+### Mermaid Diagram
+```mermaid
+graph TD;
+    A[BufferPool::getFreeCount] --> B{Is Locked?}
+    B -- Yes --> C[std::lock_guard<std::mutex> lock(mutex_)]
+    C --> D[freeBuffers_.size()]
+    D --> E[static_cast<uint32_t>(freeBuffers_.size())]
+```
+
+This diagram illustrates the flow of execution for the `getFreeCount` function, showing how it acquires a lock to ensure thread safety before accessing the buffer pool's state.
+
+## BufferPool::getTotalCount
+
+### Description
+The `getTotalCount` function returns the total number of buffers currently managed by the `BufferPool`. This includes both allocated and free buffers.
+
+### Parameters
+- **None**
+
+### Return Value
+- **uint32_t**: The total count of all buffers in the pool, including both allocated and free buffers.
+
+### Dependencies
+- **std::mutex**: Used to protect access to the `allBuffers_` vector.
+- **BufferPool**: The class that owns this function.
+
+### Side Effects
+- This function does not modify any global state or other objects.
+- It is thread-safe due to the use of a `std::lock_guard`.
+
+### Thread Safety
+- This function is thread-safe. It uses a `std::lock_guard` to ensure that only one thread can execute this function at a time, preventing race conditions.
+
+### Lifecycle
+- This function is part of the public API and is intended for use by other components within the system.
+- The `BufferPool` class manages the lifecycle of its buffers, ensuring they are properly allocated and released as needed.
+
+### Usage Example
+
+```cpp
+BufferPool pool;
+uint32_t totalBuffers = pool.getTotalCount();
+```
+
+### Mermaid Diagram
+
+```mermaid
+graph TD
+    A[getTotalCount] --> B[std::lock_guard<std::mutex>]
+    B --> C[allBuffers_.size()]
+    C --> D[static_cast<uint32_t>(allBuffers_.size())]
+```
+
+This diagram illustrates the flow of execution for the `getTotalCount` function, showing how it acquires a lock on the mutex to safely access the size of the `allBuffers_` vector and then converts that size to an unsigned 32-bit integer.
+
+## BufferPool::isFull
+
+### Description
+The `isFull` function checks whether the buffer pool is currently at its maximum capacity. This method is used to determine if further buffer acquisitions will result in exceeding the allowed number of buffers.
+
+### Parameters
+- **None**
+
+### Return Value
+- **bool**: Returns `true` if the buffer pool is full (i.e., the number of acquired buffers equals or exceeds the configured maximum), otherwise returns `false`.
+
+### Dependencies
+- **BufferPool::config_**: Contains configuration settings for the buffer pool, including the maximum number of allowed buffers (`maxBuffers`).
+
+### Side Effects
+- None
+
+### Thread Safety
+- The function is thread-safe due to the use of a `std::lock_guard<std::mutex>` to protect access to the `allBuffers_` vector and `config_.maxBuffers`.
+
+### Lifecycle
+- This function is part of the buffer pool's lifecycle, providing information about its current state.
+
+### Usage Example
+
+```cpp
+BufferPool* pool = new BufferPool(/* configuration */);
+if (pool->isFull()) {
+    // Handle the case where the buffer pool is full
+} else {
+    // Proceed with acquiring a buffer
+}
+```
+
+### Mermaid Diagram
+
+```mermaid
+graph TD;
+    A[BufferPool::isFull] --> B{allBuffers_.size() >= config_.maxBuffers};
+    B -- true --> C[true];
+    B -- false --> D[false];
+```
+
+This diagram illustrates the flow of control based on whether the buffer pool is full or not.
+
+## BufferPool::isEmpty
+
+### Description
+The `isEmpty` method checks if the buffer pool is currently empty, meaning there are no available buffers to be acquired. This method provides a simple way to determine if the buffer pool has reached its capacity and needs to grow or shrink.
+
+### Parameters
+- **None**
+
+### Return Value
+- **bool**: Returns `true` if the buffer pool is empty (i.e., no free buffers), otherwise returns `false`.
+
+### Dependencies
+- **std::mutex**: Used for thread safety when accessing the `freeBuffers_` list.
+- **freeBuffers_**: A private member variable of type `std::list<Buffer*>`, which stores all available buffers in the pool.
+
+### Side Effects
+- None. This method does not modify any shared state or trigger any side effects.
+
+### Thread Safety
+- The method is thread-safe due to the use of a `std::lock_guard` with a mutex (`mutex_`). This ensures that only one thread can execute this method at a time, preventing race conditions when accessing the `freeBuffers_` list.
+
+### Lifecycle
+- This method is part of the public API and should be called by clients who need to check if the buffer pool has any available buffers before attempting to acquire one.
+
+### Usage Example
+
+```cpp
+BufferPool* pool = new BufferPool();
+if (pool->isEmpty()) {
+    // No free buffers, grow or shrink the pool as needed
+} else {
+    // Free buffers are available, proceed with acquisition
+}
+```
+
+### Mermaid Diagram
+
+```mermaid
+graph TD;
+    A[BufferPool::isEmpty] --> B{freeBuffers_.empty()};
+    B -- true --> C[pool->isEmpty() = true];
+    B -- false --> D[pool->isEmpty() = false];
+```
+
+This diagram illustrates the flow of control when calling `isEmpty`, showing how it checks if the `freeBuffers_` list is empty and returns the appropriate boolean value.
+
+## BufferPool::notifyBufferAcquired
+
+### Description
+The `notifyBufferAcquired` function is responsible for notifying all registered listeners that a buffer has been acquired. This function iterates through the list of listeners and calls their `onBufferAcquired` method, passing the current `BufferPool` instance and the acquired `GraphicBuffer`.
+
+### Parameters
+- **buffer**: A pointer to the `GraphicBuffer` object that has been acquired.
+  - **Purpose**: The buffer that has been acquired by the pool.
+  - **Valid Values**: Any valid `GraphicBuffer` object.
+  - **Ownership**: The caller retains ownership of the `GraphicBuffer`.
+
+### Dependencies
+- **Listener Interface**: This function assumes that all registered listeners implement a common interface, such as `IBufferPoolListener`, which defines the `onBufferAcquired` method. This ensures type safety and consistency across different listener implementations.
+
+### Side Effects
+- The function does not modify any global state or shared resources.
+- It triggers the execution of the `onBufferAcquired` method for each registered listener, potentially causing side effects such as updating internal data structures or triggering other events in the system.
+
+### Thread Safety
+- This function is thread-safe. It assumes that all listeners are accessed and modified through a mutex or other synchronization mechanism to prevent race conditions.
+- The function does not require any specific locking strategy, but it should be called from a context where appropriate synchronization is ensured.
+
+### Lifecycle
+- This function is part of the `BufferPool` class lifecycle and is typically called by the system when a buffer is acquired through the pool.
+- It is designed to be efficient and performant, as it processes each listener in a single pass.
+
+### Usage Example
+
+```cpp
+class MyListener : public IBufferPoolListener {
+public:
+    void onBufferAcquired(BufferPool* pool, GraphicBuffer* buffer) override {
+        // Handle the acquired buffer
+        std::cout << "Buffer acquired: " << buffer->width() << "x" << buffer->height() << std::endl;
+    }
+};
+
+int main() {
+    BufferPool bufferPool;
+    MyListener listener;
+
+    bufferPool.addListener(&listener);
+    GraphicBuffer* buffer = bufferPool.acquireBuffer(/* parameters */);
+
+    // Use the acquired buffer...
+
+    bufferPool.releaseBuffer(buffer);
+    bufferPool.removeListener(&listener);
+
+    return 0;
+}
+```
+
+### Mermaid Diagram
+
+```mermaid
+sequenceDiagram
+    participant BufferPool
+    participant MyListener
+
+    BufferPool->>MyListener: notifyBufferAcquired(GraphicBuffer*)
+    MyListener-->>BufferPool: onBufferAcquired(BufferPool*, GraphicBuffer*)
+```
+
+This diagram illustrates the sequence of events when a buffer is acquired and notified to listeners.
+
+## BufferPool::notifyBufferReleased
+
+### Description
+The `notifyBufferReleased` function is responsible for notifying all registered listeners that a specific graphic buffer has been released. This function iterates through the list of listeners and calls their `onBufferReleased` method, passing the current `BufferPool` instance and the released `GraphicBuffer`.
+
+### Parameters
+- **buffer**: A pointer to the `GraphicBuffer` object that has been released.
+  - **Purpose**: The buffer that is being released from the pool.
+  - **Valid Values**: Any valid `GraphicBuffer` object.
+  - **Ownership**: The caller retains ownership of the buffer.
+
+### Dependencies
+- **Listener Interface**: This function relies on a listener interface defined in the `BufferPool` class. The listener interface must have a method `onBufferReleased` that takes two parameters: a pointer to the `BufferPool` instance and a pointer to the released `GraphicBuffer`.
+  - **Cross-referenced Classes**: `BufferPool`, `ListenerInterface`
+
+### Side Effects
+- This function does not modify any global state or shared resources.
+- It triggers the execution of the `onBufferReleased` method for each registered listener.
+
+### Thread Safety
+- The `notifyBufferReleased` function is thread-safe. It uses a mutex to ensure that only one thread can execute this function at a time, preventing race conditions when multiple threads attempt to release buffers simultaneously.
+  - **Mutex**: A mutex named `mutex_` is used to synchronize access to the listener list.
+
+### Lifecycle
+- This function is called by the system or other components when a buffer is released from the pool. It is typically invoked in response to a request to free up resources or when a buffer is no longer needed.
+  - **Lifecycle Stage**: This function is part of the lifecycle of the `BufferPool` class, specifically during the process of releasing buffers.
+
+### Usage Examples
+```cpp
+// Example usage of BufferPool::notifyBufferReleased
+BufferPool* pool = new BufferPool();
+GraphicBuffer* buffer = new GraphicBuffer(...);
+pool->acquireBuffer(buffer);
+// ... use the buffer ...
+pool->releaseBuffer(buffer);
+pool->notifyBufferReleased(buffer); // Notify listeners that the buffer has been released
+delete buffer;
+delete pool;
+```
+
+### Mermaid Diagram
+
+```mermaid
+sequenceDiagram
+    participant BufferPool
+    participant ListenerInterface
+    participant GraphicBuffer
+
+    BufferPool->>ListenerInterface: notifyBufferReleased(GraphicBuffer* buffer)
+    Note over ListenerInterface, BufferPool: Calls onBufferReleased method for each listener
+    ListenerInterface-->>BufferPool: void
+```
+
+This diagram illustrates the sequence of events when `notifyBufferReleased` is called. It shows how the function iterates through the list of listeners and calls their `onBufferReleased` method, passing the buffer that has been released.

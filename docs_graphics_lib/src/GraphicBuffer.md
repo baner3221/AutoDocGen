@@ -8,6 +8,42 @@
 | **Lines** | 221 |
 | **Classes** | 0 |
 | **Functions** | 16 |
+| **Last Updated** | 2026-01-18 21:17 |
+
+---
+
+## Quick Navigation
+
+### Functions
+- [GraphicBuffer::GraphicBuffer](#graphicbuffer-graphicbuffer)
+- [GraphicBuffer::~GraphicBuffer](#graphicbuffer-~graphicbuffer)
+- [GraphicBuffer::lockForRead](#graphicbuffer-lockforread)
+- [GraphicBuffer::lockForWrite](#graphicbuffer-lockforwrite)
+- [GraphicBuffer::lockRegion](#graphicbuffer-lockregion)
+- [GraphicBuffer::unlock](#graphicbuffer-unlock)
+- [GraphicBuffer::duplicateHandle](#graphicbuffer-duplicatehandle)
+- [GraphicBuffer::incRef](#graphicbuffer-incref)
+- [GraphicBuffer::decRef](#graphicbuffer-decref)
+- [GraphicBuffer::getRefCount](#graphicbuffer-getrefcount)
+- [GraphicBuffer::setAcquireFence](#graphicbuffer-setacquirefence)
+- [GraphicBuffer::waitAcquireFence](#graphicbuffer-waitacquirefence)
+- [BufferDescriptor::calculateSize](#bufferdescriptor-calculatesize)
+- [BufferDescriptor::isValid](#bufferdescriptor-isvalid)
+- [BufferDescriptor::toString](#bufferdescriptor-tostring)
+- [NativeHandle::close](#nativehandle-close)
+
+---
+
+# GraphicBuffer.cpp
+
+---
+
+| Property | Value |
+|----------|-------|
+| **Location** | `src\GraphicBuffer.cpp` |
+| **Lines** | 221 |
+| **Classes** | 0 |
+| **Functions** | 16 |
 | **Last Updated** | 2026-01-18 20:56 |
 
 ---
@@ -493,4 +529,237 @@ if (buffer) {
 
 This example demonstrates how to allocate a `GraphicBuffer` and wait for its acquire fence before accessing it. If the fence does not signal within 5 seconds, an error is handled accordingly.
 
-<!-- validation_failed: missing [~GraphicBuffer, calculateSize, isValid, toString, close] -->
+## GraphicBuffer::~GraphicBuffer
+
+### Destructor
+
+The destructor for the `GraphicBuffer` class is responsible for cleaning up resources and releasing any held handles. It ensures that the buffer is properly unlocked before freeing it, if necessary.
+
+#### Purpose
+- **Release Resources**: The destructor ensures that all resources associated with the `GraphicBuffer` are released to prevent memory leaks or resource contention.
+- **Safety Measures**: It checks if the buffer is currently locked and unlocks it before proceeding with the cleanup. This prevents potential issues where a lock might be held during the destruction process.
+
+#### Parameters
+- None
+
+#### Dependencies
+- **Allocator**: The `GraphicBuffer` class depends on an `Allocator` object to manage memory allocation and deallocation.
+- **Handle**: The `GraphicBuffer` class uses a `Handle` object to represent the underlying buffer handle, which is essential for accessing and manipulating the buffer data.
+
+#### Side Effects
+- **Resource Cleanup**: The destructor releases any held handles and unlocks the buffer if it was previously locked. This ensures that no resources are left in an inconsistent state.
+- **Thread Safety**: The destructor is thread-safe as it does not modify shared state or access external resources without proper synchronization mechanisms.
+
+#### Lifecycle
+- **Initialization**: The `GraphicBuffer` class is initialized with a handle and allocator, which are used to manage the buffer's lifecycle.
+- **Deletion**: When the `GraphicBuffer` object goes out of scope or is explicitly deleted, the destructor is called to perform cleanup.
+
+#### Usage Example
+
+```cpp
+// Example usage of GraphicBuffer in an Android application
+sp<GraphicBuffer> buffer = new GraphicBuffer(width, height, format, usage);
+buffer->lockForRead();
+// Perform operations on the buffer data
+buffer->unlock();
+```
+
+#### Mermaid Diagram
+
+```mermaid
+sequenceDiagram
+    participant BufferManager
+    participant GraphicBuffer
+    participant Allocator
+
+    BufferManager->>GraphicBuffer: createGraphicBuffer(width, height, format, usage)
+    GraphicBuffer->>Allocator: allocate(width, height, format, usage)
+    Allocator-->>GraphicBuffer: return handle
+    GraphicBuffer->>GraphicBuffer: lockForRead()
+    GraphicBuffer->>Allocator: waitAcquireFence()
+    Allocator-->>GraphicBuffer: releaseAcquireFence()
+    GraphicBuffer->>GraphicBuffer: unlock()
+    GraphicBuffer->>Allocator: free(this)
+```
+
+This diagram illustrates the sequence of operations involved in creating, locking, and unlocking a `GraphicBuffer` object. The `Allocator` is responsible for managing memory allocation and synchronization with other system components.
+
+## BufferDescriptor::calculateSize
+
+### Description
+The `calculateSize` function computes the total size of a buffer descriptor in bytes. This function is crucial for determining the memory allocation required to hold the buffer's data, which is essential for efficient memory management and performance optimization.
+
+### Parameters
+- **None**
+
+### Return Value
+- **size_t**: The calculated size of the buffer in bytes.
+
+### Dependencies
+- **None**
+
+### Side Effects
+- None
+
+### Thread Safety
+- This function is thread-safe as it does not modify any shared state or resources. It only calculates a value based on the current state of the `BufferDescriptor` object.
+
+### Lifecycle
+- The function is called during the initialization and configuration phases of the buffer descriptor, ensuring that the size is correctly calculated before any operations are performed on the buffer.
+
+### Usage Example
+
+```cpp
+GraphicBuffer buffer;
+size_t bufferSize = buffer.calculateSize();
+if (bufferSize > 0) {
+    // Proceed with buffer allocation or other operations
+} else {
+    // Handle invalid buffer case
+}
+```
+
+### Mermaid Diagram
+
+```mermaid
+graph TD
+    A[BufferDescriptor::calculateSize] --> B{isValid()}
+    B -- Yes --> C[Calculate size based on format]
+    C --> D[Return calculated size]
+    B -- No --> E[Return 0]
+```
+
+This diagram illustrates the flow of control within the `calculateSize` function, showing how it determines the buffer size based on its validity and format.
+
+## GraphicBuffer::isValid
+
+### Description
+The `isValid` method checks whether the current `GraphicBuffer` object is valid. A valid `GraphicBuffer` must have a positive width and height, and its pixel format should not be set to `PixelFormat::UNKNOWN`.
+
+### Parameters
+- **None**
+
+### Return Value
+- **bool**: Returns `true` if the `GraphicBuffer` is valid, otherwise returns `false`.
+
+### Usage Example
+```cpp
+GraphicBuffer buffer;
+if (buffer.isValid()) {
+    // Buffer is valid, proceed with operations
+} else {
+    // Handle invalid buffer case
+}
+```
+
+### Side Effects
+- None
+
+### Thread Safety
+- This method is thread-safe as it does not modify any shared state.
+
+### Lifecycle
+- The `isValid` method should be called on a valid `GraphicBuffer` object to ensure that the buffer's properties are correctly set and within expected limits.
+
+## BufferDescriptor::toString
+
+### Description
+The `toString` function is a utility method that provides a human-readable string representation of the current state of a `BufferDescriptor`. This method is particularly useful for debugging and logging purposes, allowing developers to quickly understand the dimensions, format, usage flags, and layer count of the buffer.
+
+### Parameters
+- **None**
+
+### Return Value
+- **std::string**: A formatted string that includes the width, height, stride, format, usage flags, and layer count of the `BufferDescriptor`.
+
+### Usage Example
+To use this function, you can simply call it on an instance of `BufferDescriptor`:
+
+```cpp
+BufferDescriptor buffer;
+// Assume buffer has been initialized with some values
+
+std::string description = buffer.toString();
+LOGD("Buffer Descriptor: %s", description.c_str());
+```
+
+This will output a string like:
+```
+BufferDescriptor{800x600 stride=192 format=1 usage=0x4 layers=1}
+```
+
+### Side Effects
+- This function does not modify the state of the `BufferDescriptor` object.
+- It returns a new `std::string` that is owned by the caller.
+
+### Thread Safety
+- The `toString` function is thread-safe as it does not access any shared resources or modify any global state. However, if the buffer descriptor is being used in a multi-threaded environment, ensure that appropriate synchronization mechanisms are in place to avoid race conditions.
+
+### Lifecycle
+- This function is part of the public API and can be called from any thread without restrictions.
+- The `BufferDescriptor` object must remain valid for the duration of the call to `toString`.
+
+### Dependencies
+- This function does not depend on any other classes or interfaces provided by the Android system services or HAL.
+
+### Mermaid Diagram
+```mermaid
+sequenceDiagram
+    participant BufferDescriptor
+    participant std::string
+
+    BufferDescriptor->>std::string: toString()
+    std::string-->>BufferDescriptor: return value
+```
+
+This diagram illustrates the flow of control when calling `toString` on a `BufferDescriptor` object, showing how it returns a formatted string.
+
+## GraphicBuffer::close
+
+### Description
+The `close` function is responsible for closing the file descriptor associated with a `NativeHandle`. This method ensures that any resources held by the handle are properly released and that the file descriptor is no longer valid.
+
+### Parameters
+- **None**
+
+### Dependencies
+- None
+
+### Side Effects
+- The file descriptor (`fd`) is set to `-1`, indicating that it has been closed.
+- Any resources associated with the `NativeHandle` may be freed or invalidated.
+
+### Thread Safety
+- This function is not thread-safe. It should only be called from a single-threaded context where no other operations are modifying the handle's state.
+
+### Lifecycle
+- The `close` function is typically called when the `NativeHandle` object is being destroyed, ensuring that all resources are released before the object goes out of scope.
+
+### Usage Example
+
+```cpp
+// Example usage of GraphicBuffer::close
+GraphicBuffer buffer;
+buffer.close();
+```
+
+### Mermaid Diagram
+
+```mermaid
+sequenceDiagram
+    participant NativeHandle
+    participant SystemResources
+
+    Note left of NativeHandle: Before close()
+    NativeHandle->>SystemResources: Release resources
+    NativeHandle->>NativeHandle: Set fd to -1
+    Note right of NativeHandle: After close()
+```
+
+### Notes
+- The `close` function is a crucial part of managing file descriptors in Android native services. It ensures that all system resources are properly released and prevents resource leaks.
+- This function should be called when the `NativeHandle` object is no longer needed to free up any associated resources and ensure that the file descriptor is not used again.
+
+---
+
+This documentation provides a comprehensive overview of the `close` function, including its purpose, parameters, side effects, thread safety, lifecycle, usage examples, and a mermaid diagram for better understanding.

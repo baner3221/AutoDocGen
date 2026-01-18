@@ -205,64 +205,77 @@ def init(
     console.print(f"[dim]View at:[/] {config.output_path}")
 
 
-def _perform_retry(docs_path: Path, config: Config, console: Console):
-    """
-    Internal helper to perform auto-retry logic.
-    """
-    failed_files = detect_failed_docs(docs_path)
+def _perform_retry(docs_path: Path, config: Config, console: Console) -> None:
+    """Implement the retry logic for failed documentation."""
+    # Find failed docs
+    failed_docs = detect_failed_docs(docs_path)
 
-    if not failed_files:
-        console.print("[green]No failed documentation files found![/]")
+    if not failed_docs:
+        console.print("[dim]No failed documentation found needed for retry.[/]")
         return
 
-    console.print(f"[yellow]Found {len(failed_files)} failed documentation file(s) - Retrying...[/]")
-    for failed_doc, source_file in failed_files:
-        console.print(f"  • {failed_doc.name} -> {source_file}")
+    console.print(f"\n[bold yellow]Found {len(failed_docs)} failed documentation file(s) - Retrying...[/]")
+    for md, _ in failed_docs:
+        console.print(f"  ? {md.name} -> {md.parent}")
 
     # Collect context from successful docs
-    console.print("\n[cyan]Collecting context from successful documentation...[/]")
-    context_summaries = collect_doc_context(docs_path, [f[0] for f in failed_files])
+    console.print("\n[dim]Collecting context from successful documentation...[/]")
+    context_map = collect_doc_context(docs_path, [f[0] for f in failed_docs])
 
-    # Regenerate failed files
-    console.print("\n[cyan]Regenerating failed documentation with context...[/]")
-
+    # Initialize analyzer
     from autodocgen.analyzer import CodebaseAnalyzer
-    # Create new analyzer with skipped graph for speed
-    analyzer = CodebaseAnalyzer(config, skip_graph=True)
+    analyzer = CodebaseAnalyzer(config)
 
-    # Only scan files we need to retry
-    source_files = [f[1] for f in failed_files]
-    for source_file in source_files:
-        if source_file.exists():
-            analyzer._files.append(source_file)
+    console.print("\n[bold]Processing retries...[/]")
+    
+    # Track results
+    retry_stats = {"repaired": 0, "regenerated": 0, "failed": 0}
 
-    # Parse and regenerate with context
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TaskProgressColumn(),
-        TimeElapsedColumn(),
-        console=console,
-    ) as progress:
-        task = progress.add_task("Retrying failed docs...", total=len(source_files))
+    for md_file, source_file in failed_docs:
+        try:
+            content = md_file.read_text(encoding="utf-8")
+            is_validation_failure = "validation_failed" in content and "*Documentation generation failed*" not in content
+            
+            # Parse the file first
+            analysis = analyzer.parser.parse_file(source_file)
+            
+            if is_validation_failure:
+                # Attempt Smart Repair
+                if analyzer.repair_documentation(source_file, analysis):
+                    retry_stats["repaired"] += 1
+                    continue
+                else:
+                    console.print(f"  [WARN] Smart repair failed for {source_file.name}, falling back to full regeneration")
+            
+            # Full Regeneration
+            console.print(f"  [REFRESH] Regenerating {source_file.name}...")
+            analyzer._document_file_with_context(source_file, analysis, context_map)
+            console.print(f"  [OK] {source_file.name} (Regenerated)")
+            retry_stats["regenerated"] += 1
 
-        for source_file in source_files:
-            progress.update(task, description=f"Retrying {source_file.name}")
-            try:
-                analysis = analyzer.parser.parse_file(source_file)
-                analyzer._analyses[source_file] = analysis
-                analyzer.context_builder.register_analysis(analysis)
+        except Exception as e:
+            console.print(f"  [ERROR] Retry failed for {source_file.name}: {e}")
+            retry_stats["failed"] += 1
 
-                # Regenerate with extra context
-                analyzer._document_file_with_context(
-                    source_file, analysis, context_summaries
-                )
-                console.print(f"  [green][OK][/] {source_file.name}")
-            except Exception as e:
-                console.print(f"  [red][ERR][/] {source_file.name}: {e}")
+    console.print("\n[bold]Retry Summary:[/]")
+    console.print(f"  Repaired:    {retry_stats['repaired']}")
+    console.print(f"  Regenerated: {retry_stats['regenerated']}")
+    console.print(f"  Failed:      {retry_stats['failed']}")
 
-            progress.advance(task)
+    # Re-generate diagrams and index if any succeeded
+    if retry_stats["repaired"] > 0 or retry_stats["regenerated"] > 0:
+        with Progress(
+             SpinnerColumn(spinner_name="simpleDots"),
+             TextColumn("[progress.description]{task.description}"),
+             console=console
+        ) as progress:
+            task_diag = progress.add_task("Updating diagrams...", total=None)
+            analyzer.generate_diagrams(progress, task_id=task_diag)
+            
+            task_idx = progress.add_task("Updating index...", total=None)
+            analyzer.generate_index()
+
+    console.print("\n[bold green][PASS] Retry process completed![/]")
 
 
 @app.command()
@@ -351,7 +364,7 @@ def diagrams(
     analyzer = CodebaseAnalyzer(config, skip_graph=True)
     
     with Progress(
-        SpinnerColumn(),
+        SpinnerColumn(spinner_name="simpleDots"),
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
         TaskProgressColumn(),
