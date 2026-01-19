@@ -242,13 +242,21 @@ class CodebaseAnalyzer:
         import re
         missing_functions = []
         
+        # Check global functions
         for func in analysis.functions:
-            # Robust Check: Look for the function name in a Markdown Header
             pattern = fr"^#+\s+.*{re.escape(func.name)}"
             match = re.search(pattern, documentation, re.MULTILINE | re.IGNORECASE)
-            
             if not match:
                 missing_functions.append(func.name)
+
+        # Check class methods
+        for cls in analysis.classes:
+            for method in cls.methods:
+                pattern = fr"^#+\s+.*{re.escape(method.name)}"
+                match = re.search(pattern, documentation, re.MULTILINE | re.IGNORECASE)
+                if not match:
+                    # Provide qualified name if possible to avoid ambiguity, or just name
+                    missing_functions.append(method.name)
         
         if missing_functions:
             marker = f"\n\n<!-- validation_failed: missing [{', '.join(missing_functions)}] -->"
@@ -274,6 +282,16 @@ class CodebaseAnalyzer:
         # Identify missing functions
         missing_names = self._verify_documentation(analysis, existing_doc)
         if not missing_names:
+            # Check if we need to clean failure markers even if verification passes (e.g. partial chunk failure but all functions found?)
+            # Or if it was flagged as failed but actually has everything.
+            if "*Documentation generation failed*" in existing_doc or "validation_failed" in existing_doc:
+                 cleaned_doc = existing_doc.replace("*Documentation generation failed*", "")
+                 cleaned_doc = re.sub(r"\n\n<!-- validation_failed:.*?-->", "", cleaned_doc, flags=re.DOTALL)
+                 if cleaned_doc != existing_doc:
+                     self.doc_generator.write_file_documentation(file_path, analysis, cleaned_doc)
+                     console.print(f"[green]Documentation for {file_path.name} is complete. Removed failure markers.[/]")
+                     return True
+
             console.print(f"[green]Documentation for {file_path.name} is already complete.[/]")
             return True
 
@@ -283,8 +301,14 @@ class CodebaseAnalyzer:
         system_prompt = self.prompt_builder.get_system_prompt()
         
         for func_name in missing_names:
-            # Find the function object
+            # Find the function object (check global functions first, then class methods)
             func_info = next((f for f in analysis.functions if f.name == func_name), None)
+            if not func_info:
+                for cls in analysis.classes:
+                    func_info = next((m for m in cls.methods if m.name == func_name), None)
+                    if func_info:
+                        break
+            
             if not func_info:
                 continue
 
@@ -321,8 +345,9 @@ Return ONLY the markdown documentation for this function, starting with a level 
             # Append new docs to the file
             append_content = "\n\n" + "\n\n".join(new_docs)
             
-            # Remove the validation failure marker
+            # Remove the validation failure marker and generic failure marker
             fixed_doc = re.sub(r"\n\n<!-- validation_failed:.*?-->", "", existing_doc, flags=re.DOTALL)
+            fixed_doc = fixed_doc.replace("*Documentation generation failed*", "")
             
             # Append
             final_doc = fixed_doc + append_content

@@ -234,20 +234,19 @@ def _perform_retry(docs_path: Path, config: Config, console: Console) -> None:
     for md_file, source_file in failed_docs:
         try:
             content = md_file.read_text(encoding="utf-8")
-            is_validation_failure = "validation_failed" in content and "*Documentation generation failed*" not in content
-            
             # Parse the file first
             analysis = analyzer.parser.parse_file(source_file)
             
-            if is_validation_failure:
-                # Attempt Smart Repair
-                if analyzer.repair_documentation(source_file, analysis):
-                    retry_stats["repaired"] += 1
-                    continue
-                else:
-                    console.print(f"  [WARN] Smart repair failed for {source_file.name}, falling back to full regeneration")
+            # Always attempt Smart Repair/Verification first
+            # This handles partial failures (chunk timeouts) efficiently by only generating what's missing.
+            if analyzer.repair_documentation(source_file, analysis):
+                retry_stats["repaired"] += 1
+                continue
             
-            # Full Regeneration
+            # Full Regeneration fallback
+            if "validation_failed" in content:
+                 console.print(f"  [WARN] Smart repair failed for {source_file.name} despite validation marker. Regenerating...")
+
             console.print(f"  [REFRESH] Regenerating {source_file.name}...")
             analyzer._document_file_with_context(source_file, analysis, context_map)
             console.print(f"  [OK] {source_file.name} (Regenerated)")
